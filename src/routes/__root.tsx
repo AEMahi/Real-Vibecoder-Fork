@@ -1,8 +1,7 @@
-import { createRootRoute } from "@tanstack/react-router";
-import { Outlet, ScrollRestoration, Meta, Links } from "@tanstack/react-router";
+import { createRootRoute, Outlet, ScrollRestoration, Scripts } from "@tanstack/react-router";
 import styles from "../styles.css?url";
 
-export const route = createRootRoute({
+export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charset: "utf-8" },
@@ -18,12 +17,12 @@ function RootComponent() {
   return (
     <html lang="en">
       <head>
-        <Meta />
-        <Links />
+        <link rel="stylesheet" href={styles} />
       </head>
       <body className="min-h-screen bg-background text-foreground antialiased">
         <Outlet />
         <ScrollRestoration />
+        <Scripts />
       </body>
     </html>
   );

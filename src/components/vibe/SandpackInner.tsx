@@ -42,7 +42,7 @@ export default function SandpackInner({
       files={files}
       theme="dark"
       customSetup={{
-        dependencies: { react: "^18.2.0", "react-dom": "^18.2.0" },
+        dependencies: { react: "^19.2.0", "react-dom": "^19.2.0" },
       }}
     >
       <ErrorListener onError={onError} />

@@ -221,15 +221,28 @@ export function ChatPane({
     send(prompt);
   }
 
+  const hasMessages = messages.length > 0;
+
   return (
-    <div className="flex h-full flex-col bg-card">
+    <div className={`flex h-full flex-col transition-colors ${hasMessages ? "bg-slate-50" : "bg-white"}`}>
       <div className="border-b px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm">
           <Sparkles className="h-4 w-4 text-primary" />
           <span className="font-medium">VibeCoder</span>
-          {provider && (
+          {provider ? (
+            <>
+              <Badge variant="secondary" className="text-xs">
+                {provider.label}
+              </Badge>
+              {model ? (
+                <Badge variant="outline" className="text-xs">
+                  {model}
+                </Badge>
+              ) : null}
+            </>
+          ) : (
             <Badge variant="secondary" className="text-xs">
-              {model}
+              No provider selected
             </Badge>
           )}
         </div>
