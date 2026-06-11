@@ -296,7 +296,7 @@ function Dashboard() {
         </div>
       )}
 
-      {/* 🚀 PAGE ONE: LANDING PAGE (Now Light Theme) */}
+      {/* 🚀 PAGE ONE: LANDING PAGE */}
       {currentPage === "landing" && (
         <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans justify-between relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.08),transparent_45%)]" />
@@ -335,7 +335,6 @@ function Dashboard() {
               Bring your own API keys. Prompt, blueprint, iterate, and monitor your sandbox build steps in real-time. Completely client-side and sandboxed.
             </p>
 
-            {/* Changed from a form to a direct CTA button that routes to the Home page */}
             <button 
               onClick={() => setCurrentPage("home")} 
               className="bg-indigo-600 text-white px-8 py-4 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md text-lg hover:-translate-y-0.5"
@@ -359,91 +358,106 @@ function Dashboard() {
       {/* 🏠 PAGE TWO: HOME DASHBOARD */}
       {currentPage === "home" && (
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-          <header className="flex h-16 items-center justify-between px-8 w-full border-b border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center gap-2 font-bold text-lg text-slate-900">
+          <header className="flex h-16 items-center justify-between px-8 w-full">
+            <div className="flex items-center gap-2 font-bold text-lg text-slate-900 cursor-pointer" onClick={() => setCurrentPage("landing")}>
               <Sparkles className="h-5 w-5 text-indigo-600" />
-              <span>VibeCoder Dashboard</span>
+              <span>VibeCoder</span>
             </div>
             
-            <div className="flex items-center gap-4">
-              <button 
-                onClick={() => setCurrentPage("landing")} 
-                className="text-sm font-medium text-slate-500 hover:text-slate-900 flex items-center gap-1"
-              >
-                <Home className="h-4 w-4" /> Home
-              </button>
-              <button 
-                onClick={() => setIsKeyPanelOpen(true)} 
-                className={`flex items-center gap-2 text-sm font-bold px-4 py-2 rounded-lg transition-all shadow-sm ${
-                  savedProviders.length === 0 
-                    ? "bg-indigo-600 text-white hover:bg-indigo-700 animate-pulse" 
-                    : "bg-slate-900 text-white hover:bg-slate-800"
-                }`}
-              >
-                <Key className="h-4 w-4" />
-                <span>API Keys</span>
-              </button>
-            </div>
+            <button 
+              onClick={() => setIsKeyPanelOpen(true)} 
+              className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors"
+            >
+              <Key className="h-4 w-4" />
+              <span>AI Providers</span>
+            </button>
           </header>
 
-          <main className="flex-1 w-full max-w-5xl mx-auto py-12 px-6 animate-in fade-in duration-300">
-            <div className="flex justify-between items-end mb-8">
-              <div>
-                <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Welcome back</h1>
-                <p className="text-slate-500 mt-1">Manage your recent sandbox projects and global features.</p>
-              </div>
-              <button onClick={() => setCurrentPage("chatbox")} className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-indigo-700 flex items-center gap-2 shadow-sm">
-                <Plus className="h-4 w-4" /> New Blank Project
-              </button>
+          <main className="flex-1 w-full max-w-3xl mx-auto py-16 px-6 animate-in fade-in duration-300">
+            <div className="text-center mb-10">
+              <h1 className="text-4xl md:text-5xl font-black tracking-tight text-slate-900 mb-4">
+                Vibe-code with <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-sky-500 to-emerald-500">any AI.</span>
+              </h1>
+              <p className="text-slate-500 text-base">
+                Bring your own keys — Gemini, OpenAI, Claude, Lovable, OpenRouter, anything.
+              </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="md:col-span-2 flex flex-col gap-4">
-                <h3 className="text-xs font-bold text-slate-400 tracking-wider uppercase">Recent Projects</h3>
-                {recentProjects.length === 0 ? (
-                  <div className="bg-white border border-dashed border-slate-300 rounded-xl p-12 text-center flex flex-col items-center justify-center">
-                    <Code2 className="h-10 w-10 text-slate-300 mb-3" />
-                    <p className="text-slate-500 font-medium text-sm">No past projects found.</p>
-                    <p className="text-slate-400 text-xs mt-1">Start a new chat to automatically save a project.</p>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-12 overflow-hidden focus-within:border-indigo-300 focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all">
+              <textarea 
+                placeholder="Describe an app to build... e.g. a pomodoro timer with dark mode" 
+                className="w-full resize-none p-5 pb-2 text-slate-700 outline-none text-sm bg-transparent"
+                rows={2}
+              />
+              <div className="flex justify-between items-center px-5 py-3 bg-white">
+                <span className="text-xs text-slate-400 font-medium">Ready to build</span>
+                <button 
+                  onClick={() => setCurrentPage("chatbox")} 
+                  className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-800 flex items-center gap-2 shadow-sm transition-transform hover:-translate-y-0.5"
+                >
+                  <Plus className="h-4 w-4" /> New project
+                </button>
+              </div>
+            </div>
+
+            <div className="mb-12">
+              <h3 className="text-xs font-bold text-slate-400 tracking-wider uppercase mb-4">Your Projects</h3>
+              {recentProjects.length === 0 ? (
+                <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex items-center justify-between opacity-60">
+                  <div>
+                    <h4 className="font-semibold text-slate-900">Untitled project</h4>
+                    <p className="text-xs text-slate-500 mt-1.5">{new Date().toLocaleDateString()} · 0 files</p>
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    {recentProjects.map((project) => (
-                      <div key={project.id} onClick={() => setCurrentPage("chatbox")} className="bg-white rounded-xl border border-slate-200 p-5 flex justify-between items-center shadow-sm cursor-pointer hover:border-indigo-300 hover:shadow-md transition-all group">
-                        <div>
-                          <h4 className="font-semibold text-slate-900">{project.name}</h4>
-                          <p className="text-xs text-slate-500 mt-1.5">{project.date.toLocaleDateString()} · {project.fileCount} file(s)</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs font-semibold text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity">Resume</span>
-                          <button onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id); }} className="text-slate-400 hover:text-rose-500 p-2 rounded-md hover:bg-rose-50 transition-colors"><Trash2 className="h-4 w-4" /></button>
-                        </div>
+                  <button className="text-slate-400 p-2"><Trash2 className="h-4 w-4" /></button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {recentProjects.map((project) => (
+                    <div key={project.id} onClick={() => setCurrentPage("chatbox")} className="bg-white rounded-xl border border-slate-200 p-5 flex justify-between items-center shadow-sm cursor-pointer hover:border-indigo-300 hover:shadow-md transition-all group">
+                      <div>
+                        <h4 className="font-semibold text-slate-900">{project.name}</h4>
+                        <p className="text-xs text-slate-500 mt-1.5">{project.date.toLocaleDateString()} · {project.fileCount} file(s)</p>
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <button onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id); }} className="text-slate-400 hover:text-rose-500 p-2 rounded-md hover:bg-rose-50 transition-colors">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div onClick={() => toggleFeature('planMode')} className={`rounded-xl border p-5 shadow-sm cursor-pointer transition-all ${activeFeatures.planMode ? "bg-indigo-50 border-indigo-200 ring-1 ring-indigo-500/20" : "bg-white border-slate-200 hover:border-slate-300"}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <ListTodo className={`h-4 w-4 ${activeFeatures.planMode ? "text-indigo-600" : "text-slate-700"}`} />
+                  <h4 className="font-semibold text-sm text-slate-800">Plan-first mode</h4>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">Toggle the planner and the AI writes a short plan before touching code.</p>
               </div>
 
-              <div>
-                <h3 className="text-xs font-bold text-slate-400 tracking-wider uppercase mb-4">Global Features</h3>
-                <div className="flex flex-col gap-3">
-                  <div onClick={() => toggleFeature('planMode')} className={`rounded-xl border p-4 shadow-sm cursor-pointer transition-all ${activeFeatures.planMode ? "bg-indigo-50 border-indigo-200 ring-1 ring-indigo-500/20" : "bg-white border-slate-200 hover:border-slate-300"}`}>
-                    <div className="flex justify-between items-center mb-1"><div className="flex items-center gap-2"><ListTodo className={`h-4 w-4 ${activeFeatures.planMode ? "text-indigo-600" : "text-slate-700"}`} /><h4 className="font-semibold text-sm">Plan-first mode</h4></div>{activeFeatures.planMode && <div className="h-2 w-2 rounded-full bg-indigo-600" />}</div>
-                    <p className="text-xs text-slate-500 mt-2">AI writes a plan before touching code.</p>
-                  </div>
-                  <div onClick={() => toggleFeature('liveTimer')} className={`rounded-xl border p-4 shadow-sm cursor-pointer transition-all ${activeFeatures.liveTimer ? "bg-emerald-50 border-emerald-200 ring-1 ring-emerald-500/20" : "bg-white border-slate-200 hover:border-slate-300"}`}>
-                    <div className="flex justify-between items-center mb-1"><div className="flex items-center gap-2"><Timer className={`h-4 w-4 ${activeFeatures.liveTimer ? "text-emerald-600" : "text-slate-700"}`} /><h4 className="font-semibold text-sm">Live build timer</h4></div>{activeFeatures.liveTimer && <div className="h-2 w-2 rounded-full bg-emerald-600" />}</div>
-                    <p className="text-xs text-slate-500 mt-2">Watch elapsed time while the agent works.</p>
-                  </div>
-                  <div onClick={() => toggleFeature('autoFix')} className={`rounded-xl border p-4 shadow-sm cursor-pointer transition-all ${activeFeatures.autoFix ? "bg-amber-50 border-amber-200 ring-1 ring-amber-500/20" : "bg-white border-slate-200 hover:border-slate-300"}`}>
-                    <div className="flex justify-between items-center mb-1"><div className="flex items-center gap-2"><Wrench className={`h-4 w-4 ${activeFeatures.autoFix ? "text-amber-600" : "text-slate-700"}`} /><h4 className="font-semibold text-sm">Auto-fix errors</h4></div>{activeFeatures.autoFix && <div className="h-2 w-2 rounded-full bg-amber-600" />}</div>
-                    <p className="text-xs text-slate-500 mt-2">One click sends errors back to the model.</p>
-                  </div>
-                  <div onClick={() => toggleFeature('checkpoints')} className={`rounded-xl border p-4 shadow-sm cursor-pointer transition-all ${activeFeatures.checkpoints ? "bg-sky-50 border-sky-200 ring-1 ring-sky-500/20" : "bg-white border-slate-200 hover:border-slate-300"}`}>
-                    <div className="flex justify-between items-center mb-1"><div className="flex items-center gap-2"><RotateCcw className={`h-4 w-4 ${activeFeatures.checkpoints ? "text-sky-600" : "text-slate-700"}`} /><h4 className="font-semibold text-sm">Checkpoints</h4></div>{activeFeatures.checkpoints && <div className="h-2 w-2 rounded-full bg-sky-600" />}</div>
-                    <p className="text-xs text-slate-500 mt-2">Snapshot files automatically to roll back.</p>
-                  </div>
+              <div onClick={() => toggleFeature('liveTimer')} className={`rounded-xl border p-5 shadow-sm cursor-pointer transition-all ${activeFeatures.liveTimer ? "bg-emerald-50 border-emerald-200 ring-1 ring-emerald-500/20" : "bg-white border-slate-200 hover:border-slate-300"}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <Timer className={`h-4 w-4 ${activeFeatures.liveTimer ? "text-emerald-600" : "text-slate-700"}`} />
+                  <h4 className="font-semibold text-sm text-slate-800">Live build timer</h4>
                 </div>
+                <p className="text-xs text-slate-500 leading-relaxed">Watch elapsed time and step count tick up while the agent works.</p>
+              </div>
+
+              <div onClick={() => toggleFeature('autoFix')} className={`rounded-xl border p-5 shadow-sm cursor-pointer transition-all ${activeFeatures.autoFix ? "bg-amber-50 border-amber-200 ring-1 ring-amber-500/20" : "bg-white border-slate-200 hover:border-slate-300"}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <Wrench className={`h-4 w-4 ${activeFeatures.autoFix ? "text-amber-600" : "text-slate-700"}`} />
+                  <h4 className="font-semibold text-sm text-slate-800">Auto-fix preview errors</h4>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">When the sandbox throws, one click sends the error back to the model.</p>
+              </div>
+
+              <div onClick={() => toggleFeature('checkpoints')} className={`rounded-xl border p-5 shadow-sm cursor-pointer transition-all ${activeFeatures.checkpoints ? "bg-sky-50 border-sky-200 ring-1 ring-sky-500/20" : "bg-white border-slate-200 hover:border-slate-300"}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <RotateCcw className={`h-4 w-4 ${activeFeatures.checkpoints ? "text-sky-600" : "text-slate-700"}`} />
+                  <h4 className="font-semibold text-sm text-slate-800">Checkpoints & revert</h4>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">Every turn snapshots your files. Roll back any time from the History pane.</p>
               </div>
             </div>
           </main>
@@ -474,10 +488,9 @@ function Dashboard() {
                     : "bg-white text-slate-800 border-indigo-200 hover:bg-indigo-50 ring-2 ring-indigo-500/20"
                 }`}
               >
-                <Key className="h-3.5 w-3.5" /><span>API Config</span>
+                <Key className="h-3.5 w-3.5" /><span>API Keys</span>
               </button>
 
-              {/* Models dropdown is now updated with all requested options */}
               <select value={selectedModel} onChange={(e) => handleModelChange(e.target.value as AIModel)} className="h-9 rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs shadow-sm font-medium text-slate-700">
                   <optgroup label="Google Gemini">
                     <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
@@ -620,35 +633,41 @@ function Dashboard() {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
            <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl relative animate-in zoom-in-95 duration-200">
               <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Key className="h-5 w-5 text-indigo-600" /> Connection Config</h3>
+                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Key className="h-5 w-5 text-indigo-600" /> AI Providers</h3>
                 <button onClick={() => setIsKeyPanelOpen(false)} className="text-slate-400 hover:text-slate-700 bg-white rounded-md p-1 border border-slate-200 shadow-sm"><X className="h-4 w-4" /></button>
               </div>
               
               <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto">
-                {savedProviders.length > 0 && (
+                <p className="text-sm text-slate-500">
+                  Add API keys for any AI provider. Keys are stored only in this browser's localStorage and sent directly to the provider — never to a VibeCoder server.
+                </p>
+                {savedProviders.length > 0 ? (
                   <div className="space-y-3">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Keys</h4>
                     {savedProviders.map((cred) => (
-                      <div key={cred.id} className="flex justify-between items-center p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                        <div>
+                      <div key={cred.id} className="flex justify-between items-center p-3 bg-white border border-slate-200 rounded-xl shadow-sm">
+                        <div className="flex items-center gap-2">
                           <p className="font-bold text-sm text-slate-800">{cred.label}</p>
-                          <p className="text-xs text-slate-500 font-medium">{cred.provider}</p>
+                          <span className="bg-slate-900 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">Default</span>
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                         </div>
-                        <div className="flex gap-2">
-                           <button onClick={() => handleInlineTestKey(cred)} className="text-xs font-semibold px-2 py-1 rounded bg-white border border-slate-200 text-indigo-600 shadow-sm hover:bg-indigo-50">Test</button>
-                           <button onClick={() => handleDeleteCredential(cred.id)} className="text-xs px-2 py-1 rounded bg-white border border-rose-200 text-rose-600 shadow-sm hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5"/></button>
+                        <div className="flex gap-3">
+                           <button onClick={() => handleInlineTestKey(cred)} className="text-xs font-semibold text-slate-600 hover:text-slate-900">Test</button>
+                           <button onClick={() => handleDeleteCredential(cred.id)} className="text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4"/></button>
                         </div>
                       </div>
                     ))}
                   </div>
+                ) : (
+                  <div className="border border-dashed border-slate-300 rounded-xl p-6 text-center">
+                    <p className="text-slate-500 text-sm">No providers yet. Add your first one below.</p>
+                  </div>
                 )}
 
                 <div className="space-y-4 pt-2">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Add New Provider</h4>
+                  <h4 className="text-sm font-bold text-slate-800">Add a provider</h4>
                   <div className="space-y-3">
-                    {/* The API keys dropdown is also updated to mirror the expanded list */}
                     <select value={keyProvider} onChange={(e) => setKeyProvider(e.target.value as KeyProvider)} className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white font-medium text-slate-700 shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20">
-                      <option value="gemini">Google Gemini AI</option>
+                      <option value="gemini">Google Gemini</option>
                       <option value="openai">OpenAI</option>
                       <option value="anthropic">Anthropic Claude</option>
                       <option value="local">Local Llama</option>
@@ -658,11 +677,16 @@ function Dashboard() {
                       <option value="openrouter">OpenRouter</option>
                       <option value="custom">Custom API Config</option>
                     </select>
-                    <input type="password" placeholder="Paste your secret API Key..." value={inputKey} onChange={(e) => setInputKey(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg text-sm shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20" />
-                    <input type="text" placeholder="Custom Label (e.g. My Personal Key)" value={customLabel} onChange={(e) => setCustomLabel(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg text-sm shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                    
+                    <div>
+                      <label className="text-xs font-medium text-slate-700 mb-1.5 flex items-center gap-1">Get a key <ArrowRight className="h-3 w-3 -rotate-45" /></label>
+                      <input type="password" placeholder="Starts with AIza..." value={inputKey} onChange={(e) => setInputKey(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg text-sm shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20 mb-3" />
+                      <input type="text" placeholder="Label (optional)" value={customLabel} onChange={(e) => setCustomLabel(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg text-sm shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                    </div>
+
                     <button onClick={handleTestAndAdd} disabled={isTesting || !inputKey.trim()} className="w-full bg-slate-900 text-white p-2.5 rounded-lg text-sm font-bold shadow-md hover:bg-slate-800 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
                       {isTesting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                      Add & Validate Key
+                      Add
                     </button>
                   </div>
                 </div>
