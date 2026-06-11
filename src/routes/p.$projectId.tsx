@@ -3,14 +3,12 @@ import { useState, useEffect, useRef } from "react";
 import Editor from "@monaco-editor/react";
 import { 
   Key, X, Trash2, CheckCircle2, AlertTriangle, RefreshCw, 
-  Send, Bot, User, Sparkles, Plus, ListTodo, Timer, Wrench, RotateCcw, Play, Home, ArrowRight
+  Send, Bot, User, Sparkles, Plus, ListTodo, Timer, Wrench, RotateCcw, Play
 } from "lucide-react";
 
 export const Route = createFileRoute("/p/$projectId")({
   component: Dashboard,
 });
-
-type PageView = "landing" | "home" | "chatbox";
 
 type AIModel =
   | "gemini-2.5-flash"
@@ -53,10 +51,9 @@ interface Project {
 }
 
 function Dashboard() {
-  // 🧭 Page Architecture State
-  const [currentPage, setCurrentPage] = useState<PageView>("landing");
+  const [hasChatStarted, setHasChatStarted] = useState<boolean>(false);
 
-  // Default empty project view as requested
+  // 1️⃣ Fix: Start with an empty array so the "No past projects" UI shows by default
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
 
   const [activeFeatures, setActiveFeatures] = useState({
@@ -112,16 +109,17 @@ function Dashboard() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // 🕒 Fix: Timer runs constantly while user is active on the Chatbox Page
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (currentPage === "chatbox" && activeFeatures.liveTimer) {
+    if (isGenerating && activeFeatures.liveTimer) {
       interval = setInterval(() => {
         setBuildSeconds(prev => prev + 1);
       }, 1000);
+    } else {
+      setBuildSeconds(0);
     }
     return () => clearInterval(interval);
-  }, [currentPage, activeFeatures.liveTimer]);
+  }, [isGenerating, activeFeatures.liveTimer]);
 
   const handleDeleteProject = (projectId: string) => {
     setRecentProjects((prev) => prev.filter((p) => p.id !== projectId));
@@ -198,25 +196,18 @@ function Dashboard() {
     sendToAI(errorPrompt);
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendMessage = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!chatInput.trim() || isGenerating) return;
-
-    const rawPrompt = chatInput.trim();
     
-    // Add to project history automatically when initialized
-    const readableName = rawPrompt.length > 32 ? rawPrompt.substring(0, 32) + "..." : rawPrompt;
-    setRecentProjects(prev => [
-      { id: crypto.randomUUID(), name: readableName, date: new Date(), fileCount: 1 },
-      ...prev
-    ]);
-
+    const currentMessageText = chatInput.trim();
     setChatInput("");
-    setCurrentPage("chatbox");
-    sendToAI(rawPrompt);
+    await sendToAI(currentMessageText);
   };
 
   const sendToAI = async (messageText: string) => {
+    if (!hasChatStarted) setHasChatStarted(true);
+
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
@@ -240,8 +231,8 @@ function Dashboard() {
     if (!activeCredential) {
       setTimeout(() => {
         setMessages((prev) => [...prev, {
-          id: crypto.randomUUID(), role: "assistant", content: `⚠️ No active key found for "${primaryTargetProvider}". Please use the prominent "API Keys Configuration" button in the top right to get connected.`, timestamp: new Date()
-         }]);
+          id: crypto.randomUUID(), role: "assistant", content: `⚠️ No active key found for "${primaryTargetProvider}". Please open the API Keys menu to link a functional key.`, timestamp: new Date()
+        }]);
         setIsGenerating(false);
       }, 800);
       return;
@@ -302,121 +293,63 @@ function Dashboard() {
         </div>
       )}
 
-      {/* 🚀 PAGE ONE: LANDING PAGE */}
-      {currentPage === "landing" && (
-        <div className="min-h-screen bg-slate-900 text-white flex flex-col font-sans justify-between relative overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.15),transparent_45%)]" />
-          
-          <header className="flex h-20 items-center justify-between px-10 w-full border-b border-slate-800/60 relative z-10 backdrop-blur-md bg-slate-900/40">
-            <div className="flex items-center gap-2.5 font-black text-xl tracking-tight">
-              <Sparkles className="h-6 w-6 text-indigo-400" />
+      {!hasChatStarted ? (
+        <div className="min-h-screen bg-[#fafbfc] flex flex-col font-sans">
+          <header className="flex h-16 items-center justify-between px-8 w-full border-b border-transparent">
+            <div className="flex items-center gap-2 font-bold text-lg text-slate-900">
+              <Sparkles className="h-5 w-5" />
               <span>VibeCoder</span>
             </div>
-
-            {/* Prominent High Visibility Key Target */}
-            <button 
-              onClick={() => setIsKeyPanelOpen(true)} 
-              className="flex items-center gap-2.5 text-sm font-bold bg-indigo-600 text-white px-6 py-3 rounded-xl transition-all hover:bg-indigo-500 shadow-[0_4px_20px_rgba(79,70,229,0.3)] hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <Key className="h-4 w-4" />
-              <span>Configure Required API Keys</span>
-            </button>
-          </header>
-
-          <main className="flex-1 flex flex-col items-center justify-center text-center px-6 max-w-3xl mx-auto relative z-10 py-16">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-xs text-slate-300 font-medium mb-6">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" /> Next-Gen AI Sandbox Engine
-            </div>
-            <h1 className="text-5xl md:text-6xl font-black tracking-tight text-white mb-6 leading-[1.1]">
-              Vibe-code apps with <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-sky-400 to-emerald-400">any LLM model</span>.
-            </h1>
-            <p className="text-slate-400 text-lg md:text-xl max-w-2xl mb-10 leading-relaxed">
-              Bring your own API keys. Prompt, blueprint, iterate, and monitor your sandbox build steps in real-time. Completely client-side and sandboxed.
-            </p>
-
-            <div className="flex flex-col sm:flex-row gap-4 items-center justify-center w-full">
-              <button 
-                onClick={() => setCurrentPage("home")} 
-                className="w-full sm:w-auto px-8 py-4 rounded-xl bg-white text-slate-950 font-bold text-base hover:bg-slate-100 flex items-center justify-center gap-2 shadow-xl transition-all group"
-              >
-                Enter Developer Workspace <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-              </button>
-              <button 
-                onClick={() => setIsKeyPanelOpen(true)} 
-                className="w-full sm:w-auto px-8 py-4 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 font-bold text-base hover:bg-slate-700/70 transition-all flex items-center justify-center gap-2"
-              >
-                <Key className="h-4 w-4" /> Management Keys
-              </button>
-            </div>
-          </main>
-
-          <footer className="py-6 border-t border-slate-800 text-center text-xs text-slate-500 font-medium">
-            VibeCoder © 2026 Engine Integration Environment.
-          </footer>
-        </div>
-      )}
-
-      {/* 🏡 PAGE TWO: HOME PAGE */}
-      {currentPage === "home" && (
-        <div className="min-h-screen bg-[#fafbfc] flex flex-col font-sans animate-in fade-in duration-200">
-          <header className="flex h-16 items-center justify-between px-8 w-full border-b border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center gap-2 font-bold text-lg text-slate-900 cursor-pointer" onClick={() => setCurrentPage("landing")}>
-              <Sparkles className="h-5 w-5 text-indigo-600" />
-              <span>VibeCoder Dashboard</span>
-            </div>
             
+            {/* 3️⃣ Fix: Much larger and more prominent API Keys button on landing page */}
             <button 
               onClick={() => setIsKeyPanelOpen(true)} 
-              className={`flex items-center gap-2.5 text-sm font-bold px-5 py-2.5 rounded-lg transition-all shadow-sm ${
+              className={`flex items-center gap-2 text-base font-bold px-5 py-2.5 rounded-lg transition-all shadow-sm ${
                 savedProviders.length === 0 
                   ? "bg-indigo-600 text-white hover:bg-indigo-700 animate-pulse" 
                   : "bg-slate-900 text-white hover:bg-slate-800"
               }`}
             >
-              <Key className="h-4 w-4" />
-              <span>API Providers Config</span>
+              <Key className="h-5 w-5" />
+              <span>API Providers</span>
             </button>
           </header>
 
-          <main className="flex-1 w-full max-w-4xl mx-auto flex flex-col items-center pt-16 px-6 pb-12">
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Create or Open a Project Workspace</h1>
-            <p className="text-slate-500 text-sm mb-8">Configure your layout parameters, type your architectural goals, and drop directly into coding mode.</p>
+          <main className="flex-1 w-full max-w-4xl mx-auto flex flex-col items-center pt-20 px-6 pb-12 animate-in fade-in duration-500">
+            <h1 className="text-[40px] font-bold text-slate-900 tracking-tight mb-3">Vibe-code with any AI.</h1>
+            <p className="text-slate-500 text-lg mb-10">Bring your own keys — Gemini, OpenAI, Claude, Lovable, OpenRouter, anything.</p>
 
-            <form onSubmit={handleFormSubmit} className="w-full bg-white rounded-xl border border-slate-200 shadow-md overflow-hidden flex flex-col mb-10 transition-shadow focus-within:shadow-lg focus-within:border-slate-300">
+            <form onSubmit={handleSendMessage} className="w-full bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col mb-12 transition-shadow focus-within:shadow-md focus-within:border-slate-300">
               <textarea
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (chatInput.trim()) handleFormSubmit(e); }
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (chatInput.trim()) handleSendMessage(); }
                 }}
-                placeholder="Describe an app to build from scratch... (e.g., A cryptocurrency ticker dashboard with real-time charting toggles)"
+                placeholder="Describe an app to build... e.g. a pomodoro timer with dark mode"
                 className="w-full h-28 p-5 outline-none resize-none text-slate-800 placeholder:text-slate-400 text-base"
               />
               <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/50">
-                <span className="text-xs font-medium text-slate-400">Ready to instantiate project sandbox</span>
-                <button type="submit" disabled={!chatInput.trim()} className="bg-slate-900 text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-slate-800 flex items-center gap-2 disabled:opacity-50">
-                  <Plus className="h-4 w-4" /> Instantiate Project Context
+                <span className="text-xs font-medium text-slate-400">Ready to build</span>
+                <button type="submit" disabled={!chatInput.trim()} className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 flex items-center gap-2 disabled:opacity-50">
+                  <Plus className="h-4 w-4" /> New project
                 </button>
               </div>
             </form>
 
             <div className="w-full flex flex-col gap-4">
               <h3 className="text-xs font-bold text-slate-400 tracking-wider uppercase mb-1">Your Projects</h3>
-              
-              {/* Corrected Condition: Shows standard empty view clean layout */}
               {recentProjects.length === 0 ? (
-                <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-8 text-center text-sm text-slate-500">
-                  No past projects found. Describe an app inside the prompt area above to begin!
-                </div>
+                <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-8 text-center text-sm text-slate-500">No past projects found. Describe an app to start building!</div>
               ) : (
                 <div className="space-y-2">
                   {recentProjects.map((project) => (
-                    <div key={project.id} onClick={() => setCurrentPage("chatbox")} className="bg-white rounded-xl border border-slate-200 p-4 flex justify-between items-center shadow-sm cursor-pointer hover:border-slate-400 hover:shadow transition-all group">
+                    <div key={project.id} className="bg-white rounded-xl border border-slate-200 p-4 flex justify-between items-center shadow-sm cursor-pointer hover:border-slate-300">
                       <div>
-                        <h4 className="font-bold text-slate-900 text-sm group-hover:text-indigo-600 transition-colors">{project.name}</h4>
+                        <h4 className="font-semibold text-slate-900 text-sm">{project.name}</h4>
                         <p className="text-xs text-slate-400 mt-1">{project.date.toLocaleDateString()} · {project.fileCount} files</p>
                       </div>
-                      <button onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id); }} className="text-slate-400 hover:text-rose-500 p-2 transition-colors"><Trash2 className="h-4 w-4" /></button>
+                      <button onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id); }} className="text-slate-400 hover:text-rose-500 p-2"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   ))}
                 </div>
@@ -443,38 +376,23 @@ function Dashboard() {
             </div>
           </main>
         </div>
-      )}
-
-      {/* 💬 PAGE THREE: CHATBOX PAGE */}
-      {currentPage === "chatbox" && (
-        <div className="flex h-screen flex-col overflow-hidden text-slate-900 relative bg-slate-50 animate-in fade-in duration-200">
+      ) : (
+        <div className="flex h-screen flex-col overflow-hidden text-slate-900 relative bg-slate-50 animate-in fade-in zoom-in-95 duration-300">
           <header className="flex h-16 items-center justify-between border-b bg-white px-6 relative z-40 shadow-sm">
-            <div className="flex items-center gap-4">
-              {/* 🏠 Fix: Home Button to go back to Home view to start a new project */}
-              <button 
-                onClick={() => setCurrentPage("home")} 
-                className="flex items-center gap-2 text-sm font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-lg border border-slate-200/80 transition-all active:scale-95"
-              >
-                <Home className="h-4 w-4" />
-                <span>Home</span>
-              </button>
-              
-              <div className="h-4 w-[1px] bg-slate-200" />
-              
-              <div className="flex items-center gap-2 font-semibold">
-                <Sparkles className="h-5 w-5 text-indigo-600" />
-                <span className="text-slate-800 text-base font-bold tracking-tight">Sandbox Environment</span>
-              </div>
+            <div className="flex items-center gap-2 font-semibold">
+              <Sparkles className="h-6 w-6 text-indigo-600 animate-pulse" />
+              <span className="text-slate-800 text-lg font-bold tracking-tight">Multi-AI Sandbox Dev Environment</span>
             </div>
 
             <div className="flex items-center gap-4 relative">
-              {/* Large, unmistakable, prominent API configuration setup trigger */}
+              
+              {/* 3️⃣ Fix: Larger API button for the split-pane header too */}
               <button 
                 onClick={() => setIsKeyPanelOpen(!isKeyPanelOpen)} 
-                className={`inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-5 text-sm font-bold shadow-sm transition-all ${
+                className={`inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-5 text-sm font-bold shadow-sm transition-colors ${
                   isKeyPanelOpen || savedProviders.length > 0 
                     ? "bg-slate-900 text-white hover:bg-slate-800" 
-                    : "bg-white text-slate-800 border-indigo-300 bg-gradient-to-r from-indigo-50 to-white hover:from-indigo-100 ring-2 ring-indigo-500/15"
+                    : "bg-white text-slate-800 border-indigo-200 hover:bg-indigo-50 ring-2 ring-indigo-500/20"
                 }`}
               >
                 <Key className="h-4 w-4" /><span>API Keys Configuration</span>
@@ -491,10 +409,10 @@ function Dashboard() {
             <div className="w-80 border-r border-slate-200 bg-white p-4 flex flex-col gap-4 shadow-sm z-10 overflow-y-auto">
               <div>
                 <h3 className="text-sm font-semibold text-slate-700 mb-1.5">System Context Configuration</h3>
-                <textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} className="w-full h-28 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm focus:ring-2 focus:ring-indigo-500/20 resize-none text-slate-800" />
+                <textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} className="w-full h-32 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm focus:ring-2 focus:ring-indigo-500/20 resize-none text-slate-800" />
               </div>
               
-              {/* Interactive Feature Toggles in Workspace Sidebar */}
+              {/* 2️⃣ Fix: Interactive Feature Toggles in the Sidebar */}
               <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Active Features</h3>
                  
@@ -514,7 +432,6 @@ function Dashboard() {
                       activeFeatures.liveTimer ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
                     }`}
                   >
-                    {/* Continuous elapsed duration display value inside button label */}
                     <div className="flex items-center gap-2"><Timer className="h-4 w-4"/> Build Timer {activeFeatures.liveTimer ? `(${formatTime(buildSeconds)})` : ""}</div>
                     {activeFeatures.liveTimer && <div className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse" />}
                   </button>
@@ -567,9 +484,8 @@ function Dashboard() {
               <div className="h-[45%] flex flex-col bg-slate-50/70 overflow-hidden">
                 <div className="px-4 py-2 border-b border-slate-200 bg-white flex items-center justify-between text-xs font-semibold text-slate-600 shadow-sm">
                   <span className="flex items-center gap-1.5"><Bot className="h-4 w-4 text-indigo-600" /> AI Assistant Console</span>
-                  {/* Continuous ticking indicator inside terminal block header */}
-                  {activeFeatures.liveTimer && (
-                    <span className="text-emerald-600 font-mono flex items-center gap-1 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200"><Play className="h-3 w-3" fill="currentColor"/> ELAPSED WORKTIME: {formatTime(buildSeconds)}</span>
+                  {activeFeatures.liveTimer && isGenerating && (
+                    <span className="text-emerald-600 font-mono flex items-center gap-1 animate-pulse"><Play className="h-3 w-3" fill="currentColor"/> {formatTime(buildSeconds)}</span>
                   )}
                 </div>
 
@@ -579,4 +495,62 @@ function Dashboard() {
                       <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${msg.role === "user" ? "bg-slate-900 text-white" : "bg-indigo-600 text-white"}`}>
                         {msg.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
                       </div>
-                      <div className={`rounded-xl px-4 py-2.5 text-sm leading-relaxed shadow-sm ${msg.role === "user" ? "bg-slate-900 text-
+                      <div className={`rounded-xl px-4 py-2.5 text-sm leading-relaxed shadow-sm ${msg.role === "user" ? "bg-slate-900 text-white font-medium" : "bg-white border border-slate-200 text-slate-800"}`}>
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                        <span className={`block text-[10px] mt-1 text-right text-slate-400`}>{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {isGenerating && (
+                    <div className="flex gap-3 max-w-[85%] mr-auto items-center animate-pulse">
+                      <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0"><RefreshCw className="h-4 w-4 text-indigo-600 animate-spin" /></div>
+                      <div className="bg-white border border-slate-200 text-slate-400 rounded-xl px-4 py-2 text-xs font-medium italic shadow-sm">AI is calculating response...</div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+
+                <form onSubmit={handleSendMessage} className="p-3 border-t border-slate-200 bg-white flex gap-2 shadow-inner">
+                  <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={savedProviders.length === 0 ? "⚠️ Add an API key using the button in the top right to chat..." : "Ask AI to generate functions, explain issues, or build prototypes..."} disabled={isGenerating || savedProviders.length === 0} className="flex-1 h-10 px-4 rounded-lg border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 placeholder:text-slate-400 disabled:opacity-50" />
+                  <button type="submit" disabled={!chatInput.trim() || isGenerating || savedProviders.length === 0} className="h-10 w-10 shrink-0 inline-flex items-center justify-center rounded-lg bg-slate-900 text-white transition-colors hover:bg-slate-800 shadow-sm disabled:opacity-40"><Send className="h-4 w-4" /></button>
+                </form>
+              </div>
+            </div>
+          </main>
+        </div>
+      )}
+
+      {isKeyPanelOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[200]">
+           <div className="w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-2xl relative">
+              <button onClick={() => setIsKeyPanelOpen(false)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><Key className="h-5 w-5 text-slate-700" /> AI Providers</h3>
+              
+              <div className="space-y-4">
+                {savedProviders.map((cred) => (
+                  <div key={cred.id} className="flex justify-between items-center p-3 border rounded-lg">
+                    <div><p className="font-semibold text-sm">{cred.label}</p><p className="text-xs text-slate-500">{cred.provider}</p></div>
+                    <div className="flex gap-2">
+                       <button onClick={() => handleInlineTestKey(cred)} className="text-xs text-blue-600">Test</button>
+                       <button onClick={() => handleDeleteCredential(cred.id)} className="text-xs text-red-600"><Trash2 className="h-4 w-4"/></button>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="border-t pt-4 space-y-3">
+                  <select value={keyProvider} onChange={(e) => setKeyProvider(e.target.value as KeyProvider)} className="w-full p-2 border rounded text-sm">
+                    <option value="gemini">Google Gemini</option>
+                    <option value="openai">OpenAI</option>
+                  </select>
+                  <input type="password" placeholder="API Key" value={inputKey} onChange={(e) => setInputKey(e.target.value)} className="w-full p-2 border rounded text-sm" />
+                  <input type="text" placeholder="Label" value={customLabel} onChange={(e) => setCustomLabel(e.target.value)} className="w-full p-2 border rounded text-sm" />
+                  <button onClick={handleTestAndAdd} className="w-full bg-slate-900 text-white p-2 rounded text-sm hover:bg-slate-800">Add Key</button>
+                </div>
+              </div>
+           </div>
+        </div>
+      )}
+    </>
+  );
+}
