@@ -334,4 +334,249 @@ function Dashboard() {
               Bring your own API keys. Prompt, blueprint, iterate, and monitor your sandbox build steps in real-time. Completely client-side and sandboxed.
             </p>
 
-            <div className="flex
+            <div className="flex flex-col sm:flex-row gap-4 items-center justify-center w-full">
+              <button 
+                onClick={() => setCurrentPage("home")} 
+                className="w-full sm:w-auto px-8 py-4 rounded-xl bg-white text-slate-950 font-bold text-base hover:bg-slate-100 flex items-center justify-center gap-2 shadow-xl transition-all group"
+              >
+                Enter Developer Workspace <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+              </button>
+              <button 
+                onClick={() => setIsKeyPanelOpen(true)} 
+                className="w-full sm:w-auto px-8 py-4 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 font-bold text-base hover:bg-slate-700/70 transition-all flex items-center justify-center gap-2"
+              >
+                <Key className="h-4 w-4" /> Management Keys
+              </button>
+            </div>
+          </main>
+
+          <footer className="py-6 border-t border-slate-800 text-center text-xs text-slate-500 font-medium">
+            VibeCoder © 2026 Engine Integration Environment.
+          </footer>
+        </div>
+      )}
+
+      {/* 🏡 PAGE TWO: HOME PAGE */}
+      {currentPage === "home" && (
+        <div className="min-h-screen bg-[#fafbfc] flex flex-col font-sans animate-in fade-in duration-200">
+          <header className="flex h-16 items-center justify-between px-8 w-full border-b border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center gap-2 font-bold text-lg text-slate-900 cursor-pointer" onClick={() => setCurrentPage("landing")}>
+              <Sparkles className="h-5 w-5 text-indigo-600" />
+              <span>VibeCoder Dashboard</span>
+            </div>
+            
+            <button 
+              onClick={() => setIsKeyPanelOpen(true)} 
+              className={`flex items-center gap-2.5 text-sm font-bold px-5 py-2.5 rounded-lg transition-all shadow-sm ${
+                savedProviders.length === 0 
+                  ? "bg-indigo-600 text-white hover:bg-indigo-700 animate-pulse" 
+                  : "bg-slate-900 text-white hover:bg-slate-800"
+              }`}
+            >
+              <Key className="h-4 w-4" />
+              <span>API Providers Config</span>
+            </button>
+          </header>
+
+          <main className="flex-1 w-full max-w-4xl mx-auto flex flex-col items-center pt-16 px-6 pb-12">
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Create or Open a Project Workspace</h1>
+            <p className="text-slate-500 text-sm mb-8">Configure your layout parameters, type your architectural goals, and drop directly into coding mode.</p>
+
+            <form onSubmit={handleFormSubmit} className="w-full bg-white rounded-xl border border-slate-200 shadow-md overflow-hidden flex flex-col mb-10 transition-shadow focus-within:shadow-lg focus-within:border-slate-300">
+              <textarea
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (chatInput.trim()) handleFormSubmit(e); }
+                }}
+                placeholder="Describe an app to build from scratch... (e.g., A cryptocurrency ticker dashboard with real-time charting toggles)"
+                className="w-full h-28 p-5 outline-none resize-none text-slate-800 placeholder:text-slate-400 text-base"
+              />
+              <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/50">
+                <span className="text-xs font-medium text-slate-400">Ready to instantiate project sandbox</span>
+                <button type="submit" disabled={!chatInput.trim()} className="bg-slate-900 text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-slate-800 flex items-center gap-2 disabled:opacity-50">
+                  <Plus className="h-4 w-4" /> Instantiate Project Context
+                </button>
+              </div>
+            </form>
+
+            <div className="w-full flex flex-col gap-4">
+              <h3 className="text-xs font-bold text-slate-400 tracking-wider uppercase mb-1">Your Projects</h3>
+              
+              {/* Corrected Condition: Shows standard empty view clean layout */}
+              {recentProjects.length === 0 ? (
+                <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-8 text-center text-sm text-slate-500">
+                  No past projects found. Describe an app inside the prompt area above to begin!
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {recentProjects.map((project) => (
+                    <div key={project.id} onClick={() => setCurrentPage("chatbox")} className="bg-white rounded-xl border border-slate-200 p-4 flex justify-between items-center shadow-sm cursor-pointer hover:border-slate-400 hover:shadow transition-all group">
+                      <div>
+                        <h4 className="font-bold text-slate-900 text-sm group-hover:text-indigo-600 transition-colors">{project.name}</h4>
+                        <p className="text-xs text-slate-400 mt-1">{project.date.toLocaleDateString()} · {project.fileCount} files</p>
+                      </div>
+                      <button onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id); }} className="text-slate-400 hover:text-rose-500 p-2 transition-colors"><Trash2 className="h-4 w-4" /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4 mt-2">
+                <div onClick={() => toggleFeature('planMode')} className={`rounded-xl border p-5 shadow-sm cursor-pointer transition-all ${activeFeatures.planMode ? "bg-slate-50 border-slate-900 ring-1 ring-slate-900/20" : "bg-white border-slate-200 hover:border-slate-300"}`}>
+                  <div className="flex justify-between mb-2"><div className="flex items-center gap-2"><ListTodo className={`h-4 w-4 ${activeFeatures.planMode ? "text-indigo-600" : "text-slate-700"}`} /><h4 className="font-semibold text-sm">Plan-first mode</h4></div>{activeFeatures.planMode && <div className="h-2 w-2 rounded-full bg-indigo-600 animate-pulse" />}</div>
+                  <p className="text-xs text-slate-500">Toggle the planner and the AI writes a short plan before touching code.</p>
+                </div>
+                <div onClick={() => toggleFeature('liveTimer')} className={`rounded-xl border p-5 shadow-sm cursor-pointer transition-all ${activeFeatures.liveTimer ? "bg-slate-50 border-slate-900 ring-1 ring-slate-900/20" : "bg-white border-slate-200 hover:border-slate-300"}`}>
+                  <div className="flex justify-between mb-2"><div className="flex items-center gap-2"><Timer className={`h-4 w-4 ${activeFeatures.liveTimer ? "text-emerald-600" : "text-slate-700"}`} /><h4 className="font-semibold text-sm">Live build timer</h4></div>{activeFeatures.liveTimer && <div className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse" />}</div>
+                  <p className="text-xs text-slate-500">Watch elapsed time and step count tick up while the agent works.</p>
+                </div>
+                <div onClick={() => toggleFeature('autoFix')} className={`rounded-xl border p-5 shadow-sm cursor-pointer transition-all ${activeFeatures.autoFix ? "bg-slate-50 border-slate-900 ring-1 ring-slate-900/20" : "bg-white border-slate-200 hover:border-slate-300"}`}>
+                  <div className="flex justify-between mb-2"><div className="flex items-center gap-2"><Wrench className={`h-4 w-4 ${activeFeatures.autoFix ? "text-amber-600" : "text-slate-700"}`} /><h4 className="font-semibold text-sm">Auto-fix preview errors</h4></div>{activeFeatures.autoFix && <div className="h-2 w-2 rounded-full bg-amber-600 animate-pulse" />}</div>
+                  <p className="text-xs text-slate-500">When the sandbox throws, one click sends the error back to the model.</p>
+                </div>
+                <div onClick={() => toggleFeature('checkpoints')} className={`rounded-xl border p-5 shadow-sm cursor-pointer transition-all ${activeFeatures.checkpoints ? "bg-slate-50 border-slate-900 ring-1 ring-slate-900/20" : "bg-white border-slate-200 hover:border-slate-300"}`}>
+                  <div className="flex justify-between mb-2"><div className="flex items-center gap-2"><RotateCcw className={`h-4 w-4 ${activeFeatures.checkpoints ? "text-sky-600" : "text-slate-700"}`} /><h4 className="font-semibold text-sm">Checkpoints & revert</h4></div>{activeFeatures.checkpoints && <div className="h-2 w-2 rounded-full bg-sky-600 animate-pulse" />}</div>
+                  <p className="text-xs text-slate-500">Every turn snapshots your files. Roll back any time.</p>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+      )}
+
+      {/* 💬 PAGE THREE: CHATBOX PAGE */}
+      {currentPage === "chatbox" && (
+        <div className="flex h-screen flex-col overflow-hidden text-slate-900 relative bg-slate-50 animate-in fade-in duration-200">
+          <header className="flex h-16 items-center justify-between border-b bg-white px-6 relative z-40 shadow-sm">
+            <div className="flex items-center gap-4">
+              {/* 🏠 Fix: Home Button to go back to Home view to start a new project */}
+              <button 
+                onClick={() => setCurrentPage("home")} 
+                className="flex items-center gap-2 text-sm font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-lg border border-slate-200/80 transition-all active:scale-95"
+              >
+                <Home className="h-4 w-4" />
+                <span>Home</span>
+              </button>
+              
+              <div className="h-4 w-[1px] bg-slate-200" />
+              
+              <div className="flex items-center gap-2 font-semibold">
+                <Sparkles className="h-5 w-5 text-indigo-600" />
+                <span className="text-slate-800 text-base font-bold tracking-tight">Sandbox Environment</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 relative">
+              {/* Large, unmistakable, prominent API configuration setup trigger */}
+              <button 
+                onClick={() => setIsKeyPanelOpen(!isKeyPanelOpen)} 
+                className={`inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-5 text-sm font-bold shadow-sm transition-all ${
+                  isKeyPanelOpen || savedProviders.length > 0 
+                    ? "bg-slate-900 text-white hover:bg-slate-800" 
+                    : "bg-white text-slate-800 border-indigo-300 bg-gradient-to-r from-indigo-50 to-white hover:from-indigo-100 ring-2 ring-indigo-500/15"
+                }`}
+              >
+                <Key className="h-4 w-4" /><span>API Keys Configuration</span>
+              </button>
+
+              <select value={selectedModel} onChange={(e) => handleModelChange(e.target.value as AIModel)} className="h-10 rounded-lg border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm font-medium text-slate-700">
+                  <optgroup label="Google Gemini"><option value="gemini-2.5-flash">Gemini 2.5 Flash</option></optgroup>
+                  <optgroup label="OpenAI API Integration"><option value="gpt-4o">GPT-4o Engine</option></optgroup>
+              </select>
+            </div>
+          </header>
+
+          <main className="flex flex-1 overflow-hidden relative z-10">
+            <div className="w-80 border-r border-slate-200 bg-white p-4 flex flex-col gap-4 shadow-sm z-10 overflow-y-auto">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-700 mb-1.5">System Context Configuration</h3>
+                <textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} className="w-full h-28 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm focus:ring-2 focus:ring-indigo-500/20 resize-none text-slate-800" />
+              </div>
+              
+              {/* Interactive Feature Toggles in Workspace Sidebar */}
+              <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
+                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Active Features</h3>
+                 
+                 <button 
+                    onClick={() => toggleFeature('planMode')}
+                    className={`flex items-center justify-between p-2.5 rounded-lg border text-xs font-semibold transition-colors ${
+                      activeFeatures.planMode ? "bg-indigo-50 border-indigo-200 text-indigo-700" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2"><ListTodo className="h-4 w-4"/> Plan-first mode</div>
+                    {activeFeatures.planMode && <div className="h-2 w-2 rounded-full bg-indigo-600 animate-pulse" />}
+                  </button>
+
+                  <button 
+                    onClick={() => toggleFeature('liveTimer')}
+                    className={`flex items-center justify-between p-2.5 rounded-lg border text-xs font-semibold transition-colors ${
+                      activeFeatures.liveTimer ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {/* Continuous elapsed duration display value inside button label */}
+                    <div className="flex items-center gap-2"><Timer className="h-4 w-4"/> Build Timer {activeFeatures.liveTimer ? `(${formatTime(buildSeconds)})` : ""}</div>
+                    {activeFeatures.liveTimer && <div className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse" />}
+                  </button>
+
+                  <button 
+                    onClick={() => toggleFeature('checkpoints')}
+                    className={`flex items-center justify-between p-2.5 rounded-lg border text-xs font-semibold transition-colors ${
+                      activeFeatures.checkpoints ? "bg-sky-50 border-sky-200 text-sky-700" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2"><RotateCcw className="h-4 w-4"/> Checkpoints {activeFeatures.checkpoints ? `(${codeHistory.length})` : ""}</div>
+                    {activeFeatures.checkpoints && <div className="h-2 w-2 rounded-full bg-sky-600 animate-pulse" />}
+                  </button>
+
+                  <button 
+                    onClick={() => toggleFeature('autoFix')}
+                    className={`flex items-center justify-between p-2.5 rounded-lg border text-xs font-semibold transition-colors ${
+                      activeFeatures.autoFix ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2"><Wrench className="h-4 w-4"/> Auto-fix Errors</div>
+                    {activeFeatures.autoFix && <div className="h-2 w-2 rounded-full bg-amber-600 animate-pulse" />}
+                  </button>
+              </div>
+            </div>
+
+            <div className="flex flex-1 flex-col overflow-hidden bg-white">
+              <div className="flex-1 min-h-[40%] border-b border-slate-100 p-4 relative flex flex-col">
+                <div className="text-xs font-semibold text-slate-500 tracking-wider uppercase mb-2 flex items-center justify-between">
+                  <span>Active Code Sandbox Canvas</span>
+                  <div className="flex items-center gap-2">
+                    {activeFeatures.autoFix && (
+                      <button onClick={simulateErrorAndFix} disabled={isGenerating} className="px-2 py-1 rounded bg-amber-100 text-amber-800 text-[10px] uppercase font-bold flex items-center gap-1 hover:bg-amber-200 disabled:opacity-50">
+                        <Wrench className="h-3 w-3" /> Simulate Sandbox Error
+                      </button>
+                    )}
+                    {activeFeatures.checkpoints && codeHistory.length > 0 && (
+                      <button onClick={handleRevertCode} className="px-2 py-1 rounded bg-sky-100 text-sky-800 text-[10px] uppercase font-bold flex items-center gap-1 hover:bg-sky-200">
+                        <RotateCcw className="h-3 w-3" /> Revert Checkpoint
+                      </button>
+                    )}
+                    <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] uppercase font-bold">{selectedModel}</span>
+                  </div>
+                </div>
+                <div className="flex-1 w-full rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                  <Editor height="100%" defaultLanguage="javascript" theme="light" value={code} onChange={(value) => setCode(value || "")} options={{ minimap: { enabled: false }, fontSize: 13, lineNumbers: "on", roundedSelection: true }} />
+                </div>
+              </div>
+
+              <div className="h-[45%] flex flex-col bg-slate-50/70 overflow-hidden">
+                <div className="px-4 py-2 border-b border-slate-200 bg-white flex items-center justify-between text-xs font-semibold text-slate-600 shadow-sm">
+                  <span className="flex items-center gap-1.5"><Bot className="h-4 w-4 text-indigo-600" /> AI Assistant Console</span>
+                  {/* Continuous ticking indicator inside terminal block header */}
+                  {activeFeatures.liveTimer && (
+                    <span className="text-emerald-600 font-mono flex items-center gap-1 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200"><Play className="h-3 w-3" fill="currentColor"/> ELAPSED WORKTIME: {formatTime(buildSeconds)}</span>
+                  )}
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
+                  {messages.map((msg) => (
+                    <div key={msg.id} className={`flex gap-3 max-w-[85%] animate-in fade-in slide-in-from-bottom-2 duration-150 ${msg.role === "user" ? "ml-auto flex-row-reverse" : "mr-auto"}`}>
+                      <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${msg.role === "user" ? "bg-slate-900 text-white" : "bg-indigo-600 text-white"}`}>
+                        {msg.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                      </div>
+                      <div className={`rounded-xl px-4 py-2.5 text-sm leading-relaxed shadow-sm ${msg.role === "user" ? "bg-slate-900 text-
