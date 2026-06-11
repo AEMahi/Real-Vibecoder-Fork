@@ -1,5 +1,5 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
-import "../style.css"; // <-- This points to the CSS file!
+import "../styles.css"; // <-- This perfectly matches your src/styles.css file!
 
 export const Route = createRootRoute({
   component: RootComponent,
