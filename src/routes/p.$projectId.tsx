@@ -12,10 +12,15 @@ type AIModel =
   | "gemini-2.5-pro"
   | "gpt-4o"
   | "claude-3.7-sonnet"
-  | "local-llama";
+  | "local-llama"
+  | "mistral"
+  | "groq"
+  | "deepseek"
+  | "openrouter"
+  | "custom";
 
-// Type definition for separate API key fields
-type KeyProvider = "gemini" | "openai" | "anthropic" | "local";
+// Type definition for separate API key fields including your new options
+type KeyProvider = "gemini" | "openai" | "anthropic" | "local" | "mistral" | "groq" | "deepseek" | "openrouter" | "custom";
 
 function Dashboard() {
   const [selectedModel, setSelectedModel] = useState<AIModel>("gemini-2.5-flash");
