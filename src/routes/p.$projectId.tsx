@@ -70,7 +70,7 @@ function Dashboard() {
   return (
     <div className="flex h-screen flex-col overflow-hidden text-slate-900 relative">
       {/* Top Navigation Control Bar */}
-      <header className="flex h-14 items-center justify-between border-b bg-card px-6 relative z-50">
+      <header className="flex h-14 items-center justify-between border-b bg-card px-6 relative z-40">
         <div className="flex items-center gap-2 font-semibold">
           <span className="text-primary text-lg">⚙️ Multi-AI Sandbox Dev Environment</span>
         </div>
@@ -79,7 +79,7 @@ function Dashboard() {
         <div className="flex items-center gap-4 relative">
           
           {/* 🔑 Interactive Panel Control Interface */}
-          <div className="relative">
+          <div>
             <button
               onClick={() => setIsKeyPanelOpen(!isKeyPanelOpen)}
               className={`inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium shadow-sm transition-colors focus:outline-none ${
@@ -91,68 +91,6 @@ function Dashboard() {
               <Key className="h-4 w-4" />
               <span>API Keys</span>
             </button>
-
-            {/* 📋 Multi-Provider Key Input Dropdown Drawer */}
-            {isKeyPanelOpen && (
-              <div className="absolute right-0 mt-2 w-80 rounded-lg border border-input bg-white p-4 shadow-xl z-50 animate-in fade-in slide-in-from-top-1 duration-150">
-                <div className="flex items-center justify-between mb-4 border-b pb-2">
-                  <h4 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
-                    <Key className="h-3.5 w-3.5 text-muted-foreground" /> LLM Credentials
-                  </h4>
-                  <button 
-                    onClick={() => setIsKeyPanelOpen(false)}
-                    className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-                
-                <div className="space-y-4">
-                  {/* Select Provider Grid Row */}
-                  <div className="grid grid-cols-3 items-center gap-4">
-                    <label className="text-xs font-medium text-slate-600">
-                      Provider
-                    </label>
-                    <select
-                      value={keyProvider}
-                      onChange={(e) => setKeyProvider(e.target.value as KeyProvider)}
-                      className="col-span-2 h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                    >
-                      <option value="gemini">Google Gemini</option>
-                      <option value="openai">OpenAI API</option>
-                      <option value="anthropic">Anthropic Claude</option>
-                      <option value="local">Local Endpoints</option>
-                      <option value="mistral">Mistral AI</option>
-                      <option value="groq">Groq API</option>
-                      <option value="deepseek">DeepSeek API</option>
-                      <option value="openrouter">OpenRouter API</option>
-                      <option value="custom">Custom Endpoint</option>
-                    </select>
-                  </div>
-
-                  {/* Dynamic Secret Key Grid Row */}
-                  <div className="grid grid-cols-3 items-center gap-4">
-                    <label className="text-xs font-medium text-slate-600 capitalize">
-                      API Key
-                    </label>
-                    <div className="col-span-2">
-                      <input
-                        type="password"
-                        placeholder={keyProvider === "local" ? "http://localhost:11434" : "sk-..."}
-                        value={apiKeys[keyProvider]}
-                        onChange={(e) => handleKeyChange(e.target.value)}
-                        className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring text-slate-900"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Bulletproof Security Notice Context text block */}
-                  <p className="text-[10px] text-muted-foreground leading-relaxed pt-2 border-t border-slate-100">
-                    Keys are safely compiled in memory and sent directly to native client API targets. They are never retained on our cloud origin servers.
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* State-Driven Model Picker */}
@@ -225,6 +163,80 @@ function Dashboard() {
           </div>
         </div>
       </main>
+
+      {/* 📋 Centered Multi-Provider Modal Panel Overlay */}
+      {isKeyPanelOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-150">
+          <div className="w-full max-w-xl rounded-xl border border-slate-200 bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-150 relative">
+            
+            {/* Close button top right */}
+            <button 
+              onClick={() => setIsKeyPanelOpen(false)}
+              className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 rounded-md p-1 transition-colors focus:outline-none"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            {/* Modal Header */}
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                <Key className="h-5 w-5 text-slate-700" /> AI Providers
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                Add API keys for any AI provider. Keys are stored only in this browser's localStorage and sent directly to the provider — never to a VibeCoder server.
+              </p>
+            </div>
+            
+            <div className="space-y-5 border-t border-slate-100 pt-4">
+              {/* Select Provider block */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-700">
+                  Add a provider
+                </label>
+                <select
+                  value={keyProvider}
+                  onChange={(e) => setKeyProvider(e.target.value as KeyProvider)}
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                >
+                  <option value="gemini">Google Gemini</option>
+                  <option value="openai">OpenAI (ChatGPT)</option>
+                  <option value="anthropic">Anthropic Claude</option>
+                  <option value="local">Local Endpoints</option>
+                  <option value="mistral">Mistral</option>
+                  <option value="groq">Groq</option>
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="custom">Custom (OpenAI-compatible)</option>
+                </select>
+              </div>
+
+              {/* Secret Key Input block */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-700">
+                    Get a key ↗
+                  </label>
+                </div>
+                <input
+                  type="password"
+                  placeholder={keyProvider === "local" ? "http://localhost:11434" : "Starts with AIza..."}
+                  value={apiKeys[keyProvider]}
+                  onChange={(e) => handleKeyChange(e.target.value)}
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 text-slate-900"
+                />
+              </div>
+
+              {/* Action Button layout row mimicking image structure */}
+              <button 
+                onClick={() => setIsKeyPanelOpen(false)}
+                className="w-full h-10 mt-2 inline-flex items-center justify-center rounded-lg bg-slate-900 text-white font-medium text-sm transition-colors hover:bg-slate-800"
+              >
+                + Add
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
