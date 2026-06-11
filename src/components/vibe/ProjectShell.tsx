@@ -33,12 +33,15 @@ import { PreviewPane } from "./PreviewPane";
 import { loadSettings, saveSettings } from "@/lib/vibe/storage";
 import type { Project, VibeSettings, ProviderKey, ChatMessage, FileMap, Checkpoint } from "@/lib/vibe/types";
 
+// 1. UPDATED: Added onOpenSettings to the Props interface
 interface Props {
   project: Project;
   onChange: (next: Project) => void;
+  onOpenSettings?: () => void; 
 }
 
-export function ProjectShell({ project, onChange }: Props) {
+// 2. UPDATED: Destructured onOpenSettings from components props
+export function ProjectShell({ project, onChange, onOpenSettings }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<VibeSettings>({ providers: [] });
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -160,9 +163,13 @@ export function ProjectShell({ project, onChange }: Props) {
 
   useEffect(() => {
     if (settings.providers.length === 0) {
-      setSettingsOpen(true);
+      if (onOpenSettings) {
+        onOpenSettings();
+      } else {
+        setSettingsOpen(true);
+      }
     }
-  }, [settings.providers.length]);
+  }, [settings.providers.length, onOpenSettings]);
 
   const provider = useMemo(() => {
     const id = project.selectedProviderId ?? settings.defaultProviderKeyId;
@@ -205,10 +212,8 @@ export function ProjectShell({ project, onChange }: Props) {
 
   const checkpoints = [...(project.checkpoints ?? [])].reverse();
 
-  // Helpers for selecting provider/model per project
   function setProjectProvider(id?: string) {
     const next: Project = { ...project, selectedProviderId: id };
-    // If selecting a provider, set a sensible default model if none selected
     if (id) {
       const pk = settings.providers.find((p) => p.id === id);
       const def = pk ? getProviderDef(pk.providerId) : undefined;
@@ -224,7 +229,6 @@ export function ProjectShell({ project, onChange }: Props) {
   }
 
   const selectedProviderKeyId = project.selectedProviderId ?? "default";
-  const selectedProviderKey = settings.providers.find((p) => p.id === selectedProviderKeyId) ?? null;
   const activeProviderKey = project.selectedProviderId
     ? settings.providers.find((p) => p.id === project.selectedProviderId) ?? null
     : settings.providers.find((p) => p.id === settings.defaultProviderKeyId) ?? settings.providers[0] ?? null;
@@ -288,7 +292,8 @@ export function ProjectShell({ project, onChange }: Props) {
             <Button size="sm" variant="outline" onClick={exportZip}>
               <Download className="h-4 w-4 mr-1" /> Export
             </Button>
-            <Button size="sm" onClick={() => setSettingsOpen(true)}>
+            {/* 3. UPDATED: Gear icon button will trigger the parent modal handler if present */}
+            <Button size="sm" onClick={() => onOpenSettings ? onOpenSettings() : setSettingsOpen(true)}>
               <Settings className="h-4 w-4 mr-1" /> Settings
             </Button>
           </div>
@@ -497,6 +502,7 @@ export function ProjectShell({ project, onChange }: Props) {
             <div className="flex min-h-0 flex-1 overflow-hidden">
               <ResizablePanelGroup orientation="horizontal" className="h-full">
                 <ResizablePanel defaultSize={28} minSize={20}>
+                  {/* 4. UPDATED: Passed down handler here as well */}
                   <ChatPane
                     messages={project.messages}
                     files={project.files}
@@ -508,7 +514,7 @@ export function ProjectShell({ project, onChange }: Props) {
                     onTogglePlanner={setPlanner}
                     onCheckpoint={addCheckpoint}
                     onChange={updateChat}
-                    onOpenSettings={() => setSettingsOpen(true)}
+                    onOpenSettings={onOpenSettings ?? (() => setSettingsOpen(true))}
                   />
                 </ResizablePanel>
                 <ResizableHandle withHandle />
