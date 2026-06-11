@@ -53,9 +53,8 @@ interface Project {
 function Dashboard() {
   const [hasChatStarted, setHasChatStarted] = useState<boolean>(false);
 
-  const [recentProjects, setRecentProjects] = useState<Project[]>([
-    { id: "1", name: "Pomodoro Timer App", date: new Date(), fileCount: 3 }
-  ]);
+  // 1️⃣ Fix: Start with an empty array so the "No past projects" UI shows by default
+  const [recentProjects, setRecentProjects] = useState<Project[]>([]);
 
   const [activeFeatures, setActiveFeatures] = useState({
     planMode: false,
@@ -69,10 +68,7 @@ function Dashboard() {
     `// Selected Engine: ${selectedModel}\nfunction init() {\n  console.log("Hello from your sandbox workspace!");\n}`
   );
   
-  // 🕒 Feature State: Live Timer
   const [buildSeconds, setBuildSeconds] = useState<number>(0);
-  
-  // ⏪ Feature State: Checkpoints
   const [codeHistory, setCodeHistory] = useState<string[]>([]);
 
   const [systemPrompt, setSystemPrompt] = useState<string>(
@@ -102,7 +98,6 @@ function Dashboard() {
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-dismiss notifications
   useEffect(() => {
     if (notification) {
       const timer = setTimeout(() => setNotification(null), 4000);
@@ -110,12 +105,10 @@ function Dashboard() {
     }
   }, [notification]);
 
-  // Scroll chat to bottom
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // 🕒 Feature Logic: Live Timer Effect
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isGenerating && activeFeatures.liveTimer) {
@@ -154,7 +147,7 @@ function Dashboard() {
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${secretKey}`);
         return res.status === 200;
       }
-      return true; // Simplified for this example
+      return true; 
     } catch {
       return false;
     }
@@ -188,7 +181,6 @@ function Dashboard() {
     setSavedProviders((prev) => prev.filter((item) => item.id !== id));
   };
 
-  // ⏪ Feature Logic: Revert Checkpoint
   const handleRevertCode = () => {
     if (codeHistory.length > 0) {
       const previousCode = codeHistory[codeHistory.length - 1];
@@ -198,12 +190,9 @@ function Dashboard() {
     }
   };
 
-  // 🔧 Feature Logic: Simulate Auto-Fix Error
   const simulateErrorAndFix = () => {
     const mockError = `Uncaught TypeError: Cannot read properties of undefined (reading 'map')\n    at RenderList (App.tsx:42:15)\n    at React Component Tree`;
     const errorPrompt = `I am getting this error in my preview console. Please analyze the code and provide a fix:\n\n${mockError}`;
-    
-    // Automatically trigger the send message flow with the error
     sendToAI(errorPrompt);
   };
 
@@ -216,7 +205,6 @@ function Dashboard() {
     await sendToAI(currentMessageText);
   };
 
-  // Abstracted send function so auto-fix can use it too
   const sendToAI = async (messageText: string) => {
     if (!hasChatStarted) setHasChatStarted(true);
 
@@ -230,7 +218,6 @@ function Dashboard() {
     setMessages((prev) => [...prev, userMsg]);
     setIsGenerating(true);
 
-    // ⏪ Save checkpoint before new generation
     if (activeFeatures.checkpoints) {
       setCodeHistory(prev => [...prev, code]);
     }
@@ -244,14 +231,13 @@ function Dashboard() {
     if (!activeCredential) {
       setTimeout(() => {
         setMessages((prev) => [...prev, {
-          id: crypto.randomUUID(), role: "assistant", content: `⚠️ No active key found for "${primaryTargetProvider}".`, timestamp: new Date()
+          id: crypto.randomUUID(), role: "assistant", content: `⚠️ No active key found for "${primaryTargetProvider}". Please open the API Keys menu to link a functional key.`, timestamp: new Date()
         }]);
         setIsGenerating(false);
       }, 800);
       return;
     }
 
-    // 🧠 Feature Logic: Plan-first mode injection
     const finalSystemPrompt = activeFeatures.planMode 
       ? systemPrompt + "\n\nCRITICAL INSTRUCTION: You must start your response with a numbered list outlining your step-by-step plan before writing ANY code blocks." 
       : systemPrompt;
@@ -271,7 +257,6 @@ function Dashboard() {
         const data = await res.json();
         aiResponseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "No legible response returned.";
       } else {
-        // Mock response for other providers
         aiResponseText = `[Mock Response via ${activeCredential.label}]: Received message "${messageText}".\n\n${activeFeatures.planMode ? "1. Analyzing request\n2. Structuring fix\n3. Applying code\n\n" : ""}Code would be generated here.`;
       }
 
@@ -288,7 +273,6 @@ function Dashboard() {
     }
   };
 
-  // Helper for timer format
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60).toString().padStart(2, '0');
     const s = (seconds % 60).toString().padStart(2, '0');
@@ -316,9 +300,18 @@ function Dashboard() {
               <Sparkles className="h-5 w-5" />
               <span>VibeCoder</span>
             </div>
-            <button onClick={() => setIsKeyPanelOpen(true)} className="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors">
-              <Key className="h-4 w-4" />
-              <span>AI Providers</span>
+            
+            {/* 3️⃣ Fix: Much larger and more prominent API Keys button on landing page */}
+            <button 
+              onClick={() => setIsKeyPanelOpen(true)} 
+              className={`flex items-center gap-2 text-base font-bold px-5 py-2.5 rounded-lg transition-all shadow-sm ${
+                savedProviders.length === 0 
+                  ? "bg-indigo-600 text-white hover:bg-indigo-700 animate-pulse" 
+                  : "bg-slate-900 text-white hover:bg-slate-800"
+              }`}
+            >
+              <Key className="h-5 w-5" />
+              <span>API Providers</span>
             </button>
           </header>
 
@@ -347,7 +340,7 @@ function Dashboard() {
             <div className="w-full flex flex-col gap-4">
               <h3 className="text-xs font-bold text-slate-400 tracking-wider uppercase mb-1">Your Projects</h3>
               {recentProjects.length === 0 ? (
-                <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-8 text-center text-sm text-slate-500">No past projects found.</div>
+                <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-8 text-center text-sm text-slate-500">No past projects found. Describe an app to start building!</div>
               ) : (
                 <div className="space-y-2">
                   {recentProjects.map((project) => (
@@ -363,19 +356,19 @@ function Dashboard() {
               )}
 
               <div className="grid grid-cols-2 gap-4 mt-2">
-                <div onClick={() => toggleFeature('planMode')} className={`rounded-xl border p-5 shadow-sm cursor-pointer transition-all ${activeFeatures.planMode ? "bg-slate-50 border-slate-900 ring-1 ring-slate-900/20" : "bg-white border-slate-200"}`}>
+                <div onClick={() => toggleFeature('planMode')} className={`rounded-xl border p-5 shadow-sm cursor-pointer transition-all ${activeFeatures.planMode ? "bg-slate-50 border-slate-900 ring-1 ring-slate-900/20" : "bg-white border-slate-200 hover:border-slate-300"}`}>
                   <div className="flex justify-between mb-2"><div className="flex items-center gap-2"><ListTodo className={`h-4 w-4 ${activeFeatures.planMode ? "text-indigo-600" : "text-slate-700"}`} /><h4 className="font-semibold text-sm">Plan-first mode</h4></div>{activeFeatures.planMode && <div className="h-2 w-2 rounded-full bg-indigo-600 animate-pulse" />}</div>
                   <p className="text-xs text-slate-500">Toggle the planner and the AI writes a short plan before touching code.</p>
                 </div>
-                <div onClick={() => toggleFeature('liveTimer')} className={`rounded-xl border p-5 shadow-sm cursor-pointer transition-all ${activeFeatures.liveTimer ? "bg-slate-50 border-slate-900 ring-1 ring-slate-900/20" : "bg-white border-slate-200"}`}>
+                <div onClick={() => toggleFeature('liveTimer')} className={`rounded-xl border p-5 shadow-sm cursor-pointer transition-all ${activeFeatures.liveTimer ? "bg-slate-50 border-slate-900 ring-1 ring-slate-900/20" : "bg-white border-slate-200 hover:border-slate-300"}`}>
                   <div className="flex justify-between mb-2"><div className="flex items-center gap-2"><Timer className={`h-4 w-4 ${activeFeatures.liveTimer ? "text-emerald-600" : "text-slate-700"}`} /><h4 className="font-semibold text-sm">Live build timer</h4></div>{activeFeatures.liveTimer && <div className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse" />}</div>
                   <p className="text-xs text-slate-500">Watch elapsed time and step count tick up while the agent works.</p>
                 </div>
-                <div onClick={() => toggleFeature('autoFix')} className={`rounded-xl border p-5 shadow-sm cursor-pointer transition-all ${activeFeatures.autoFix ? "bg-slate-50 border-slate-900 ring-1 ring-slate-900/20" : "bg-white border-slate-200"}`}>
+                <div onClick={() => toggleFeature('autoFix')} className={`rounded-xl border p-5 shadow-sm cursor-pointer transition-all ${activeFeatures.autoFix ? "bg-slate-50 border-slate-900 ring-1 ring-slate-900/20" : "bg-white border-slate-200 hover:border-slate-300"}`}>
                   <div className="flex justify-between mb-2"><div className="flex items-center gap-2"><Wrench className={`h-4 w-4 ${activeFeatures.autoFix ? "text-amber-600" : "text-slate-700"}`} /><h4 className="font-semibold text-sm">Auto-fix preview errors</h4></div>{activeFeatures.autoFix && <div className="h-2 w-2 rounded-full bg-amber-600 animate-pulse" />}</div>
                   <p className="text-xs text-slate-500">When the sandbox throws, one click sends the error back to the model.</p>
                 </div>
-                <div onClick={() => toggleFeature('checkpoints')} className={`rounded-xl border p-5 shadow-sm cursor-pointer transition-all ${activeFeatures.checkpoints ? "bg-slate-50 border-slate-900 ring-1 ring-slate-900/20" : "bg-white border-slate-200"}`}>
+                <div onClick={() => toggleFeature('checkpoints')} className={`rounded-xl border p-5 shadow-sm cursor-pointer transition-all ${activeFeatures.checkpoints ? "bg-slate-50 border-slate-900 ring-1 ring-slate-900/20" : "bg-white border-slate-200 hover:border-slate-300"}`}>
                   <div className="flex justify-between mb-2"><div className="flex items-center gap-2"><RotateCcw className={`h-4 w-4 ${activeFeatures.checkpoints ? "text-sky-600" : "text-slate-700"}`} /><h4 className="font-semibold text-sm">Checkpoints & revert</h4></div>{activeFeatures.checkpoints && <div className="h-2 w-2 rounded-full bg-sky-600 animate-pulse" />}</div>
                   <p className="text-xs text-slate-500">Every turn snapshots your files. Roll back any time.</p>
                 </div>
@@ -385,18 +378,27 @@ function Dashboard() {
         </div>
       ) : (
         <div className="flex h-screen flex-col overflow-hidden text-slate-900 relative bg-slate-50 animate-in fade-in zoom-in-95 duration-300">
-          <header className="flex h-14 items-center justify-between border-b bg-white px-6 relative z-40 shadow-sm">
+          <header className="flex h-16 items-center justify-between border-b bg-white px-6 relative z-40 shadow-sm">
             <div className="flex items-center gap-2 font-semibold">
-              <Sparkles className="h-5 w-5 text-indigo-600 animate-pulse" />
-              <span className="text-slate-800 text-base font-bold tracking-tight">Multi-AI Sandbox Dev Environment</span>
+              <Sparkles className="h-6 w-6 text-indigo-600 animate-pulse" />
+              <span className="text-slate-800 text-lg font-bold tracking-tight">Multi-AI Sandbox Dev Environment</span>
             </div>
 
             <div className="flex items-center gap-4 relative">
-              <button onClick={() => setIsKeyPanelOpen(!isKeyPanelOpen)} className={`inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium shadow-sm transition-colors ${isKeyPanelOpen || savedProviders.length > 0 ? "bg-slate-900 text-white" : "bg-white text-slate-700"}`}>
-                <Key className="h-4 w-4" /><span>API Keys</span>
+              
+              {/* 3️⃣ Fix: Larger API button for the split-pane header too */}
+              <button 
+                onClick={() => setIsKeyPanelOpen(!isKeyPanelOpen)} 
+                className={`inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-5 text-sm font-bold shadow-sm transition-colors ${
+                  isKeyPanelOpen || savedProviders.length > 0 
+                    ? "bg-slate-900 text-white hover:bg-slate-800" 
+                    : "bg-white text-slate-800 border-indigo-200 hover:bg-indigo-50 ring-2 ring-indigo-500/20"
+                }`}
+              >
+                <Key className="h-4 w-4" /><span>API Keys Configuration</span>
               </button>
 
-              <select value={selectedModel} onChange={(e) => handleModelChange(e.target.value as AIModel)} className="h-9 rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm font-medium text-slate-700">
+              <select value={selectedModel} onChange={(e) => handleModelChange(e.target.value as AIModel)} className="h-10 rounded-lg border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm font-medium text-slate-700">
                   <optgroup label="Google Gemini"><option value="gemini-2.5-flash">Gemini 2.5 Flash</option></optgroup>
                   <optgroup label="OpenAI API Integration"><option value="gpt-4o">GPT-4o Engine</option></optgroup>
               </select>
@@ -404,19 +406,55 @@ function Dashboard() {
           </header>
 
           <main className="flex flex-1 overflow-hidden relative z-10">
-            <div className="w-80 border-r border-slate-200 bg-white p-4 flex flex-col gap-4 shadow-sm z-10">
+            <div className="w-80 border-r border-slate-200 bg-white p-4 flex flex-col gap-4 shadow-sm z-10 overflow-y-auto">
               <div>
                 <h3 className="text-sm font-semibold text-slate-700 mb-1.5">System Context Configuration</h3>
                 <textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} className="w-full h-32 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm focus:ring-2 focus:ring-indigo-500/20 resize-none text-slate-800" />
               </div>
               
-              {/* Feature Active States Indicator Panel */}
+              {/* 2️⃣ Fix: Interactive Feature Toggles in the Sidebar */}
               <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
-                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active Features</h3>
-                 {activeFeatures.planMode && <div className="flex items-center gap-2 text-xs font-medium text-indigo-600 bg-indigo-50 p-2 rounded border border-indigo-100"><ListTodo className="h-3 w-3"/> Planner Active</div>}
-                 {activeFeatures.liveTimer && <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 bg-emerald-50 p-2 rounded border border-emerald-100"><Timer className="h-3 w-3"/> Build Timer: {formatTime(buildSeconds)}</div>}
-                 {activeFeatures.checkpoints && <div className="flex items-center gap-2 text-xs font-medium text-sky-600 bg-sky-50 p-2 rounded border border-sky-100"><RotateCcw className="h-3 w-3"/> {codeHistory.length} Checkpoints Saved</div>}
-                 {activeFeatures.autoFix && <div className="flex items-center gap-2 text-xs font-medium text-amber-600 bg-amber-50 p-2 rounded border border-amber-100"><Wrench className="h-3 w-3"/> Auto-fix Armed</div>}
+                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Active Features</h3>
+                 
+                 <button 
+                    onClick={() => toggleFeature('planMode')}
+                    className={`flex items-center justify-between p-2.5 rounded-lg border text-xs font-semibold transition-colors ${
+                      activeFeatures.planMode ? "bg-indigo-50 border-indigo-200 text-indigo-700" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2"><ListTodo className="h-4 w-4"/> Plan-first mode</div>
+                    {activeFeatures.planMode && <div className="h-2 w-2 rounded-full bg-indigo-600 animate-pulse" />}
+                  </button>
+
+                  <button 
+                    onClick={() => toggleFeature('liveTimer')}
+                    className={`flex items-center justify-between p-2.5 rounded-lg border text-xs font-semibold transition-colors ${
+                      activeFeatures.liveTimer ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2"><Timer className="h-4 w-4"/> Build Timer {activeFeatures.liveTimer ? `(${formatTime(buildSeconds)})` : ""}</div>
+                    {activeFeatures.liveTimer && <div className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse" />}
+                  </button>
+
+                  <button 
+                    onClick={() => toggleFeature('checkpoints')}
+                    className={`flex items-center justify-between p-2.5 rounded-lg border text-xs font-semibold transition-colors ${
+                      activeFeatures.checkpoints ? "bg-sky-50 border-sky-200 text-sky-700" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2"><RotateCcw className="h-4 w-4"/> Checkpoints {activeFeatures.checkpoints ? `(${codeHistory.length})` : ""}</div>
+                    {activeFeatures.checkpoints && <div className="h-2 w-2 rounded-full bg-sky-600 animate-pulse" />}
+                  </button>
+
+                  <button 
+                    onClick={() => toggleFeature('autoFix')}
+                    className={`flex items-center justify-between p-2.5 rounded-lg border text-xs font-semibold transition-colors ${
+                      activeFeatures.autoFix ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2"><Wrench className="h-4 w-4"/> Auto-fix Errors</div>
+                    {activeFeatures.autoFix && <div className="h-2 w-2 rounded-full bg-amber-600 animate-pulse" />}
+                  </button>
               </div>
             </div>
 
@@ -425,21 +463,16 @@ function Dashboard() {
                 <div className="text-xs font-semibold text-slate-500 tracking-wider uppercase mb-2 flex items-center justify-between">
                   <span>Active Code Sandbox Canvas</span>
                   <div className="flex items-center gap-2">
-                    
-                    {/* 🔧 Auto-Fix Mock Button */}
                     {activeFeatures.autoFix && (
                       <button onClick={simulateErrorAndFix} disabled={isGenerating} className="px-2 py-1 rounded bg-amber-100 text-amber-800 text-[10px] uppercase font-bold flex items-center gap-1 hover:bg-amber-200 disabled:opacity-50">
                         <Wrench className="h-3 w-3" /> Simulate Sandbox Error
                       </button>
                     )}
-                    
-                    {/* ⏪ Checkpoint Revert Button */}
                     {activeFeatures.checkpoints && codeHistory.length > 0 && (
                       <button onClick={handleRevertCode} className="px-2 py-1 rounded bg-sky-100 text-sky-800 text-[10px] uppercase font-bold flex items-center gap-1 hover:bg-sky-200">
-                        <RotateCcw className="h-3 w-3" /> Revert
+                        <RotateCcw className="h-3 w-3" /> Revert Checkpoint
                       </button>
                     )}
-
                     <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] uppercase font-bold">{selectedModel}</span>
                   </div>
                 </div>
@@ -451,8 +484,6 @@ function Dashboard() {
               <div className="h-[45%] flex flex-col bg-slate-50/70 overflow-hidden">
                 <div className="px-4 py-2 border-b border-slate-200 bg-white flex items-center justify-between text-xs font-semibold text-slate-600 shadow-sm">
                   <span className="flex items-center gap-1.5"><Bot className="h-4 w-4 text-indigo-600" /> AI Assistant Console</span>
-                  
-                  {/* 🕒 Timer Display in Header */}
                   {activeFeatures.liveTimer && isGenerating && (
                     <span className="text-emerald-600 font-mono flex items-center gap-1 animate-pulse"><Play className="h-3 w-3" fill="currentColor"/> {formatTime(buildSeconds)}</span>
                   )}
@@ -481,8 +512,8 @@ function Dashboard() {
                 </div>
 
                 <form onSubmit={handleSendMessage} className="p-3 border-t border-slate-200 bg-white flex gap-2 shadow-inner">
-                  <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="Ask AI to generate functions, explain issues, or build prototypes..." disabled={isGenerating} className="flex-1 h-10 px-4 rounded-lg border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 placeholder:text-slate-400" />
-                  <button type="submit" disabled={!chatInput.trim() || isGenerating} className="h-10 w-10 shrink-0 inline-flex items-center justify-center rounded-lg bg-slate-900 text-white transition-colors hover:bg-slate-800 shadow-sm disabled:opacity-40"><Send className="h-4 w-4" /></button>
+                  <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={savedProviders.length === 0 ? "⚠️ Add an API key using the button in the top right to chat..." : "Ask AI to generate functions, explain issues, or build prototypes..."} disabled={isGenerating || savedProviders.length === 0} className="flex-1 h-10 px-4 rounded-lg border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 placeholder:text-slate-400 disabled:opacity-50" />
+                  <button type="submit" disabled={!chatInput.trim() || isGenerating || savedProviders.length === 0} className="h-10 w-10 shrink-0 inline-flex items-center justify-center rounded-lg bg-slate-900 text-white transition-colors hover:bg-slate-800 shadow-sm disabled:opacity-40"><Send className="h-4 w-4" /></button>
                 </form>
               </div>
             </div>
@@ -490,7 +521,6 @@ function Dashboard() {
         </div>
       )}
 
-      {/* Key Panel Modal (Simplified for brevity but functionally identical) */}
       {isKeyPanelOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[200]">
            <div className="w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-2xl relative">
