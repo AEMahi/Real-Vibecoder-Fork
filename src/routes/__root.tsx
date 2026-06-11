@@ -7,7 +7,7 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <>
-      {/* This Outlet acts like a window that renders our index page or project page dynamically */}
+      {/* This Outlet acts like a portal that loads either your index page or your project page automatically depending on the URL */}
       <Outlet />
     </>
   );
