@@ -1,5 +1,5 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
-import "../styles.css"; // <-- This perfectly matches your src/styles.css file!
+import "../styles.css"; // <-- This MUST match your file name exactly
 
 export const Route = createRootRoute({
   component: RootComponent,
