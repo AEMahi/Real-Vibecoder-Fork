@@ -355,8 +355,15 @@ export default function Dashboard() {
           }]);
         }
 
-        if (activeCredential.provider === "gemini") {
-          const targetModelName = currentModel.includes("pro") ? "gemini-2.5-pro" : "gemini-2.5-flash";
+       if (activeCredential.provider === "gemini") {
+  // SIMULATION: Automatically force Gemini to fail so it triggers the next key in line
+  throw new Error("Simulated Token Exhaustion (429 Too Many Requests)");
+
+  /* Old code commented out for reference:
+  const targetModelName = currentModel.includes("pro") ? "gemini-2.5-pro" : "gemini-2.5-flash";
+  ...
+  */
+}
           const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${targetModelName}:generateContent?key=${activeCredential.key}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
