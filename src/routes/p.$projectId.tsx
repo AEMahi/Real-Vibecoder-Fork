@@ -355,15 +355,31 @@ export default function Dashboard() {
           }]);
         }
 
-       if (activeCredential.provider === "gemini") {
-  // SIMULATION: Automatically force Gemini to fail so it triggers the next key in line
-  throw new Error("Simulated Token Exhaustion (429 Too Many Requests)");
+    if (activeCredential.provider === "gemini") {
+          // 🛑 SIMULATION: Force Gemini to immediately fail to test our automatic failover loop
+          throw new Error("Simulated Token Exhaustion (429 Too Many Requests)");
 
-  /* Old code commented out for reference:
-  const targetModelName = currentModel.includes("pro") ? "gemini-2.5-pro" : "gemini-2.5-flash";
-  ...
-  */
-}
+          /* The rest of the Gemini code is safely bypassed below
+          const targetModelName = currentModel.includes("pro") ? "gemini-2.5-pro" : "gemini-2.5-flash";
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${targetModelName}:generateContent?key=${activeCredential.key}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: `System context: ${finalSystemPrompt}\n\nCode context:\n${code}\n\nUser request: ${messageText}` }] }]
+            })
+          });
+
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(`API Error ${res.status}: ${errData?.error?.message || res.statusText}`);
+          }
+
+          const data = await res.json();
+          aiResponseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          if (!aiResponseText) throw new Error("Empty payload from target engine.");
+          */
+
+        } else {
           const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${targetModelName}:generateContent?key=${activeCredential.key}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
