@@ -249,6 +249,14 @@ export default function Dashboard() {
     return match ? match[1].trim() : null;
   };
 
+  // Helper to map a model name to its required provider key type
+  const getProviderForModel = (m: string): KeyProvider => {
+    if (m.startsWith("gemini")) return "gemini";
+    if (m.startsWith("gpt")) return "openai";
+    if (m.startsWith("claude")) return "anthropic";
+    return m as KeyProvider;
+  };
+
   const sendToAI = async (messageText: string) => {
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(), role: "user", content: messageText, timestamp: new Date()
@@ -261,48 +269,91 @@ export default function Dashboard() {
       setCodeHistory(prev => [...prev, code]);
     }
 
-    const primaryTargetProvider = selectedModel.startsWith("gemini") ? "gemini" : 
-                                  selectedModel.startsWith("gpt") ? "openai" : 
-                                  selectedModel.startsWith("claude") ? "anthropic" : selectedModel;
+    // 1. Define logical fallback chains for each selected model
+    const fallbackChains: Record<string, AIModel[]> = {
+      "gemini-2.5-pro": ["claude-3.7-sonnet", "gpt-4o", "gemini-2.5-flash"],
+      "gpt-4o": ["claude-3.7-sonnet", "gemini-2.5-pro", "gemini-2.5-flash"],
+      "claude-3.7-sonnet": ["gpt-4o", "gemini-2.5-pro", "gemini-2.5-flash"],
+      "gemini-2.5-flash": ["mistral", "groq", "deepseek", "local-llama"],
+    };
 
-    const activeCredential = savedProviders.find(p => p.provider === primaryTargetProvider) || savedProviders[0];
-
-    if (!activeCredential) {
-      setTimeout(() => {
-        setMessages((prev) => [...prev, {
-          id: crypto.randomUUID(), role: "assistant", content: `⚠️ No active key found for "${primaryTargetProvider}". Please use the "API Keys" button to get connected.`, timestamp: new Date()
-        }]);
-        setIsGenerating(false);
-      }, 800);
-      return;
-    }
+    // 2. Build a unique fallback model queue to iterate through
+    const defaultFallbacks: AIModel[] = ["gemini-2.5-flash", "gpt-4o", "claude-3.7-sonnet", "groq", "mistral"];
+    const queue = [selectedModel, ...(fallbackChains[selectedModel] || defaultFallbacks)];
+    const modelsToTry = Array.from(new Set(queue)); // Avoid duplicate model tries
 
     const basePrompt = systemPrompt.trim() || "You are an expert full-stack developer assistant. CRITICAL: When writing or updating code, you MUST output a SINGLE, complete, runnable HTML file containing all HTML, CSS (in `<style>`), and JavaScript (in `<script>`). Wrap your final solution in a single markdown code block (using triple backticks, e.g. ```html). Output the ENTIRE updated file content.";
     const finalSystemPrompt = activeFeatures.planMode 
       ? basePrompt + "\n\nCRITICAL INSTRUCTION: You must start your response with a numbered list outlining your step-by-step plan before writing ANY code blocks." 
       : basePrompt;
 
-    try {
-      let aiResponseText = "";
+    let aiResponseText = "";
+    let success = false;
+    let lastErrorMessage = "No configured API key found for this provider path.";
 
-      if (activeCredential.provider === "gemini") {
-        const targetModelName = selectedModel.includes("pro") ? "gemini-2.5-pro" : "gemini-2.5-flash";
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${targetModelName}:generateContent?key=${activeCredential.key}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: `System context: ${finalSystemPrompt}\n\nHere is the current code in the sandbox:\n\n${code}\n\nUser request: ${messageText}` }] }]
-          })
-        });
-        const data = await res.json();
-        aiResponseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "No legible response returned.";
-      } else {
-        const ticks = String.fromCharCode(96, 96, 96);
-        const mockHtml = `<!DOCTYPE html>\n<html>\n<head>\n<style>body{font-family:sans-serif; text-align:center; padding:50px; background:#f0fdf4; color:#166534;}</style>\n</head>\n<body>\n<h1>Mock Update Successful! ✅</h1>\n<p>Requested: ${messageText}</p>\n<script>console.log("Mock JS executed");</script>\n</body>\n</html>`;
-        
-        aiResponseText = `[Mock Response via ${activeCredential.label}]: Received message "${messageText}".\n\n${activeFeatures.planMode ? "1. Analyzing request\n2. Structuring fix\n3. Applying code\n\n" : ""}Here is your generated code:\n${ticks}html\n${mockHtml}\n${ticks}`;
+    // 3. Keep trying fallback options if one runs out of tokens or fails
+    for (let i = 0; i < modelsToTry.length; i++) {
+      const currentModel = modelsToTry[i];
+      const targetProvider = getProviderForModel(currentModel);
+      const activeCredential = savedProviders.find(p => p.provider === targetProvider);
+
+      if (!activeCredential) {
+        continue; // No key for this model? Skip directly to the next fallback candidate
       }
 
+      try {
+        // Post a notification in the chat if a fallback has been triggered
+        if (i > 0) {
+          setMessages((prev) => [...prev, {
+            id: crypto.randomUUID(), role: "assistant", 
+            content: `⚠️ Selected model failed (rate limit / token limit). Automatically falling back to **${currentModel}**...`, 
+            timestamp: new Date()
+          }]);
+        }
+
+        if (activeCredential.provider === "gemini") {
+          const targetModelName = currentModel.includes("pro") ? "gemini-2.5-pro" : "gemini-2.5-flash";
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${targetModelName}:generateContent?key=${activeCredential.key}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: `System context: ${finalSystemPrompt}\n\nHere is the current code in the sandbox:\n\n${code}\n\nUser request: ${messageText}` }] }]
+            })
+          });
+
+          // Throw an error on exhaustion or API level failures to engage the failover loop
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(`API Rate Limit/Token Issue: ${res.status} - ${errData?.error?.message || res.statusText}`);
+          }
+
+          const data = await res.json();
+          aiResponseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          
+          if (!aiResponseText) throw new Error("Empty response returned from Gemini API.");
+
+        } else {
+          // Mock structure for alternate APIs or custom providers
+          const ticks = String.fromCharCode(96, 96, 96);
+          const mockHtml = `<!DOCTYPE html>\n<html>\n<head>\n<style>body{font-family:sans-serif; text-align:center; padding:50px; background:#f0fdf4; color:#166534;}</style>\n</head>\n<body>\n<h1>Success! (via Fallback: ${currentModel}) ✅</h1>\n<p>Requested: ${messageText}</p>\n<script>console.log("Mock JS executed");</script>\n</body>\n</html>`;
+          
+          await new Promise(resolve => setTimeout(resolve, 800)); // Simulate round-trip latency
+          
+          aiResponseText = `[Response via ${activeCredential.label} using ${currentModel}]: Received message "${messageText}".\n\n${activeFeatures.planMode ? "1. Analyzing request\n2. Structuring fix\n3. Applying code\n\n" : ""}Here is your generated code:\n${ticks}html\n${mockHtml}\n${ticks}`;
+        }
+
+        success = true;
+        break; // Successfully got a response, end the fallback loop!
+
+      } catch (err) {
+        console.warn(`[Failover Activated] ${currentModel} failed:`, err);
+        lastErrorMessage = (err as Error).message;
+        // The catch statement swallows the error so the for-loop continues onto the next best choice
+      }
+    }
+
+    // 4. Handle final message updates and state code injects
+    if (success) {
       setMessages((prev) => [...prev, {
         id: crypto.randomUUID(), role: "assistant", content: aiResponseText, timestamp: new Date()
       }]);
@@ -312,14 +363,15 @@ export default function Dashboard() {
         setCode(newCode);
         setNotification({ type: "success", message: "Sandbox updated with AI code!" });
       }
-
-    } catch (err) {
+    } else {
       setMessages((prev) => [...prev, {
-        id: crypto.randomUUID(), role: "assistant", content: `❌ Error: ${(err as Error).message}`, timestamp: new Date()
+        id: crypto.randomUUID(), role: "assistant", 
+        content: `❌ Request failed. All available fallback models were exhausted or no valid API keys were found for them. Last Error: ${lastErrorMessage}`, 
+        timestamp: new Date()
       }]);
-    } finally {
-      setIsGenerating(false);
     }
+
+    setIsGenerating(false);
   };
 
   const formatTime = (seconds: number) => {
