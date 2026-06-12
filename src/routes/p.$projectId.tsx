@@ -54,7 +54,7 @@ interface Project {
 
 function Dashboard() {
   // FIXED: Default state is now "chatbox" so it completely skips the landing page
-  const [currentPage, setCurrentPage] = useState<PageView>("chatbox");
+  const [currentPage, setCurrentPage] = useState<PageView>("home");
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
 
   const [activeFeatures, setActiveFeatures] = useState({
