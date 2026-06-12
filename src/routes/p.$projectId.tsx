@@ -53,7 +53,8 @@ interface Project {
 }
 
 function Dashboard() {
-  const [currentPage, setCurrentPage] = useState<PageView>("home");
+  // FIXED: Default state is now "chatbox" so it completely skips the landing page
+  const [currentPage, setCurrentPage] = useState<PageView>("chatbox");
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
 
   const [activeFeatures, setActiveFeatures] = useState({
@@ -71,7 +72,7 @@ function Dashboard() {
   const [buildSeconds, setBuildSeconds] = useState<number>(0);
   const [codeHistory, setCodeHistory] = useState<string[]>([]);
 
-  // System prompt is now blank by default, matching the placeholder
+  // System prompt is blank by default to show the placeholder
   const [systemPrompt, setSystemPrompt] = useState<string>("");
 
   const [isKeyPanelOpen, setIsKeyPanelOpen] = useState<boolean>(false);
@@ -239,7 +240,6 @@ function Dashboard() {
       return;
     }
 
-    // Use the placeholder as a fallback if the user left the input blank
     const basePrompt = systemPrompt.trim() || "You are an expert full-stack developer assistant.";
     const finalSystemPrompt = activeFeatures.planMode 
       ? basePrompt + "\n\nCRITICAL INSTRUCTION: You must start your response with a numbered list outlining your step-by-step plan before writing ANY code blocks." 
