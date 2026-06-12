@@ -53,7 +53,6 @@ interface Project {
 }
 
 function Dashboard() {
-  // Start directly on the home dashboard page
   const [currentPage, setCurrentPage] = useState<PageView>("home");
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
 
@@ -72,9 +71,8 @@ function Dashboard() {
   const [buildSeconds, setBuildSeconds] = useState<number>(0);
   const [codeHistory, setCodeHistory] = useState<string[]>([]);
 
-  const [systemPrompt, setSystemPrompt] = useState<string>(
-    "You are an expert full-stack developer assistant."
-  );
+  // System prompt is now blank by default, matching the placeholder
+  const [systemPrompt, setSystemPrompt] = useState<string>("");
 
   const [isKeyPanelOpen, setIsKeyPanelOpen] = useState<boolean>(false);
   const [keyProvider, setKeyProvider] = useState<KeyProvider>("gemini");
@@ -201,7 +199,6 @@ function Dashboard() {
 
     const rawPrompt = chatInput.trim();
     
-    // Create an initial project record if this is the first interaction in a new sandbox
     if (messages.length === 1 && recentProjects.length === 0) {
       const readableName = rawPrompt.length > 32 ? rawPrompt.substring(0, 32) + "..." : rawPrompt;
       setRecentProjects(prev => [
@@ -242,9 +239,11 @@ function Dashboard() {
       return;
     }
 
+    // Use the placeholder as a fallback if the user left the input blank
+    const basePrompt = systemPrompt.trim() || "You are an expert full-stack developer assistant.";
     const finalSystemPrompt = activeFeatures.planMode 
-      ? systemPrompt + "\n\nCRITICAL INSTRUCTION: You must start your response with a numbered list outlining your step-by-step plan before writing ANY code blocks." 
-      : systemPrompt;
+      ? basePrompt + "\n\nCRITICAL INSTRUCTION: You must start your response with a numbered list outlining your step-by-step plan before writing ANY code blocks." 
+      : basePrompt;
 
     try {
       let aiResponseText = "";
@@ -421,16 +420,12 @@ function Dashboard() {
             <div className="flex items-center gap-4 relative">
               <button 
                 onClick={() => setIsKeyPanelOpen(!isKeyPanelOpen)} 
-                className={`inline-flex h-9 items-center justify-center gap-2 rounded-lg border px-4 text-xs font-bold shadow-sm transition-colors ${
-                  isKeyPanelOpen || savedProviders.length > 0 
-                    ? "bg-slate-900 text-white hover:bg-slate-800" 
-                    : "bg-white text-slate-800 border-indigo-200 hover:bg-indigo-50 ring-2 ring-indigo-500/20"
-                }`}
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-lg px-4 text-xs font-bold text-white bg-gradient-to-r from-indigo-600 via-sky-500 to-emerald-500 shadow-sm hover:shadow-md hover:opacity-90 transition-all hover:-translate-y-[1px]"
               >
                 <Key className="h-3.5 w-3.5" /><span>API Keys</span>
               </button>
 
-              <select value={selectedModel} onChange={(e) => handleModelChange(e.target.value as AIModel)} className="h-9 rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs shadow-sm font-medium text-slate-700">
+              <select value={selectedModel} onChange={(e) => handleModelChange(e.target.value as AIModel)} className="h-9 rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs shadow-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer">
                   <optgroup label="Google Gemini">
                     <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                     <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
@@ -457,7 +452,12 @@ function Dashboard() {
             <div className="w-72 border-r border-slate-200 bg-white p-4 flex flex-col gap-4 shadow-sm z-10 overflow-y-auto">
               <div>
                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">System Context</h3>
-                <textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} className="w-full h-28 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs focus:ring-2 focus:ring-indigo-500/20 resize-none text-slate-700" />
+                <textarea 
+                  placeholder="You are an expert full-stack developer assistant."
+                  value={systemPrompt} 
+                  onChange={(e) => setSystemPrompt(e.target.value)} 
+                  className="w-full h-28 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs focus:ring-2 focus:ring-indigo-500/20 resize-none text-slate-700 placeholder:text-slate-400" 
+                />
               </div>
               
               <div className="flex flex-col gap-2 pt-3 border-t border-slate-100">
