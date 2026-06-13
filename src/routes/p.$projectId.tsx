@@ -100,16 +100,13 @@ export default function Dashboard() {
 </body>
 </html>`
   );
-
   const [buildSeconds, setBuildSeconds] = useState<number>(0);
   const [codeHistory, setCodeHistory] = useState<string[]>([]);
-  const [systemPrompt, setSystemPrompt] = useState<string>(
-    "You are an expert full-stack developer assistant. CRITICAL: When writing or updating code, you MUST output a SINGLE, complete, runnable HTML file containing all HTML, CSS (in `<style>`), and JavaScript (in `<script>`). Wrap your final solution in a single markdown code block (using triple backticks, e.g. ```html). Output the ENTIRE updated file content."
-  );
+  const [systemPrompt, setSystemPrompt] = useState<string>("");
 
   const [isKeyPanelOpen, setIsKeyPanelOpen] = useState<boolean>(false);
   const [keyProvider, setKeyProvider] = useState<KeyProvider>("gemini");
-  const [inputKey, setInputKey] = useState<string>( "");
+  const [inputKey, setInputKey] = useState<string>("");
   const [customLabel, setCustomLabel] = useState<string>("");
 
   const [isTesting, setIsTesting] = useState<boolean>(false);
@@ -125,7 +122,7 @@ export default function Dashboard() {
       timestamp: new Date()
     }
   ]);
-  const [chatInput, setChatInput] = useState<string>( "");
+  const [chatInput, setChatInput] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -210,8 +207,7 @@ export default function Dashboard() {
     if (codeHistory.length > 0) {
       const previousCode = codeHistory[codeHistory.length - 1];
       setCode(previousCode);
-      codeHistory.pop();
-      setCodeHistory([...codeHistory]);
+      setCodeHistory(prev => prev.slice(0, -1));
       setNotification({ type: "success", message: "Reverted to previous checkpoint." });
     }
   };
@@ -225,11 +221,11 @@ export default function Dashboard() {
   const handleFormSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!chatInput.trim() || isGenerating) return;
-
     const rawPrompt = chatInput.trim();
     
     if (messages.length === 1 && recentProjects.length === 0) {
-      const readableName = rawPrompt.length > 32 ? rawPrompt.substring(0, 32) + "..." : rawPrompt;
+      const readableName = rawPrompt.length > 32 ?
+        rawPrompt.substring(0, 32) + "..." : rawPrompt;
       setRecentProjects(prev => [
         { id: crypto.randomUUID(), name: readableName, date: new Date(), fileCount: 1 },
         ...prev
@@ -258,51 +254,52 @@ export default function Dashboard() {
       setCodeHistory(prev => [...prev, code]);
     }
 
-    // Build the fallback model priority pipeline arrays
-    const fallbackChains: Record<string, AIModel[]> = {
-      "gemini-2.5-pro": ["claude-3.7-sonnet", "gpt-4o", "gemini-2.5-flash"],
-      "gpt-4o": ["claude-3.7-sonnet", "gemini-2.5-pro", "gemini-2.5-flash"],
-      "claude-3.7-sonnet": ["gpt-4o", "gemini-2.5-pro", "gemini-2.5-flash"],
-      "gemini-2.5-flash": ["mistral", "groq", "deepseek", "local-llama"],
-    };
-
-    const defaultFallbacks: AIModel[] = ["gemini-2.5-flash", "gpt-4o", "claude-3.7-sonnet", "groq"];
-    const queue = [selectedModel, ...(fallbackChains[selectedModel] || defaultFallbacks)];
-    const modelsToTry = Array.from(new Set(queue));
-
+    const basePrompt = systemPrompt.trim() ||
+      "You are an expert full-stack developer assistant. CRITICAL: When writing or updating code, you MUST output a SINGLE, complete, runnable HTML file containing all HTML, CSS (in `<style>`), and JavaScript (in `<script>`). Wrap your final solution in a single markdown code block (using triple backticks, e.g. ```html). Output the ENTIRE updated file content.";
     const finalSystemPrompt = activeFeatures.planMode 
-      ? systemPrompt + "\n\nCRITICAL INSTRUCTION: You must start your response with a numbered list outlining your step-by-step plan before writing ANY code blocks."
-      : systemPrompt;
+      ? basePrompt + "\n\nCRITICAL INSTRUCTION: You must start your response with a numbered list outlining your step-by-step plan before writing ANY code blocks."
+      : basePrompt;
 
-    let aiResponseText = "";
-    let success = false;
-    let lastErrorMessage = "No configured API keys matching this provider workspace pipeline route.";
+    // 1. Build the Sequence Queue based on what model was selected in the UI dropdown
+    let providersToTry: KeyProvider[] = [];
+    if (selectedModel.startsWith("gemini")) {
+      providersToTry = ["gemini", "anthropic", "openai"]; // Automatic Failover Routing Sequence
+    } else if (selectedModel.startsWith("gpt")) {
+      providersToTry = ["openai"];
+    } else if (selectedModel.startsWith("claude")) {
+      providersToTry = ["anthropic"];
+    } else {
+      providersToTry = [selectedModel as KeyProvider];
+    }
 
-    // Automatic Failover Execution Loop
-    for (let i = 0; i < modelsToTry.length; i++) {
-      const currentModel = modelsToTry[i];
-      const primaryTargetProvider = currentModel.startsWith("gemini") ? "gemini" : 
-                                    currentModel.startsWith("gpt") ? "openai" : 
-                                    currentModel.startsWith("claude") ? "anthropic" : currentModel;
+    let completedSuccessfully = false;
 
-      const activeCredential = savedProviders.find(p => p.provider === primaryTargetProvider);
+    // 2. Step through the queue loop sequentially
+    for (let i = 0; i < providersToTry.length; i++) {
+      const currentProvider = providersToTry[i];
+      const activeCredential = savedProviders.find(p => p.provider === currentProvider);
 
-      if (!activeCredential) continue; 
+      // Skip this engine provider if the user doesn't have a saved key for it
+      if (!activeCredential) continue;
+
+      // Visual pipeline notification if the loop drops back into a secondary key
+      if (i > 0) {
+        setMessages((prev) => [...prev, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: `⚠️ Engine exhausted or restricted. Automatically falling back to ${currentProvider}...`,
+          timestamp: new Date()
+        }]);
+      }
 
       try {
-        if (i > 0) {
-          setMessages((prev) => [...prev, {
-            id: crypto.randomUUID(), role: "assistant", 
-            content: `⚠️ Engine exhausted or restricted. Automatically falling back to **${currentModel}**...`, 
-            timestamp: new Date()
-          }]);
-        }
+        let aiResponseText = "";
 
-        if (activeCredential.provider === "gemini") {
-          // 🛑 TEST SIMULATION FLAG: Triggers failover loop testing instantly
-          throw new Error("Simulated Token Exhaustion (429 Too Many Requests)");
+        if (currentProvider === "gemini") {
+          // 👇 TEST INTERCEPT SIMULATION: Immediately crashes the Gemini path to verify the fallback routing loop works
+          throw new Error("Simulated Token Exhaustion (429 Rate Limit Exceeded)");
 
-          /* const targetModelName = currentModel.includes("pro") ? "gemini-2.5-pro" : "gemini-2.5-flash";
+          /* const targetModelName = selectedModel.includes("pro") ? "gemini-2.5-pro" : "gemini-2.5-flash";
           const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${targetModelName}:generateContent?key=${activeCredential.key}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -314,33 +311,53 @@ export default function Dashboard() {
           aiResponseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "No legible response returned.";
           */
         } else {
+          // Safe Sandbox Mock Response Pathway
           const ticks = String.fromCharCode(96, 96, 96);
-          const mockHtml = `<!DOCTYPE html>\n<html>\n<head>\n<style>body{font-family:sans-serif; text-align:center; padding:50px; background:#f0fdf4; color:#166534;}</style>\n</head>\n<body>\n<h1>Mock Update Successful! ✅</h1>\n<p>Engine Used: ${currentModel}</p>\n<p>Requested Changes: "${messageText}"</p>\n</body>\n</html>`;
-          aiResponseText = `[Mock Response via ${activeCredential.label}]: Connection stable.\n\n${activeFeatures.planMode ? "1. Analyzing request\n2. Structuring fix\n3. Applying code\n\n" : ""}Here is your generated code:\n${ticks}html\n${mockHtml}\n${ticks}`;
+          const mockHtml = `<!DOCTYPE html>\n<html>\n<head>\n<style>body{font-family:sans-serif; text-align:center; padding:50px; background:#f0fdf4; color:#166534;}</style>\n</head>\n<body>\n<h1>Mock Update Successful! ✅</h1>\n<p>Engine Used: ${currentProvider}</p>\n<p>Requested: ${messageText}</p>\n<script>console.log("Mock JS executed");</script>\n</body>\n</html>`;
+          
+          aiResponseText = `[Mock Response via ${activeCredential.label}]: Received message "${messageText}".\n\n${activeFeatures.planMode ?
+            "1. Analyzing request\n2. Structuring fix\n3. Applying code\n\n" : ""}Here is your generated code:\n${ticks}html\n${mockHtml}\n${ticks}`;
         }
 
-        success = true;
-        break; 
+        // Output response and handle updates if code ran smoothly
+        setMessages((prev) => [...prev, {
+          id: crypto.randomUUID(), role: "assistant", content: aiResponseText, timestamp: new Date()
+        }]);
+
+        const newCode = extractCode(aiResponseText);
+        if (newCode) {
+          setCode(newCode);
+          setNotification({ type: "success", message: "Sandbox updated with AI code!" });
+        }
+
+        completedSuccessfully = true;
+        break; // Success! Break out of the fallback queue
 
       } catch (err) {
-        console.warn(`[Failover Activated] ${currentModel} encountered an issue:`, err);
-        lastErrorMessage = (err as Error).message;
+        console.warn(`Provider [${currentProvider}] error intercepted:`, err);
+        // If everything in the queue has been exhausted and failed, post final error message
+        if (i === providersToTry.length - 1) {
+          setMessages((prev) => [...prev, {
+            id: crypto.randomUUID(), role: "assistant", content: `❌ Final Error: ${(err as Error).message}`, timestamp: new Date()
+          }]);
+        }
       }
     }
 
-    if (success) {
-      setMessages((prev) => [...prev, {
-        id: crypto.randomUUID(), role: "assistant", content: aiResponseText, timestamp: new Date()
-      }]);
-      const newCode = extractCode(aiResponseText);
-      if (newCode) {
-        setCode(newCode);
-        setNotification({ type: "success", message: "Sandbox updated with AI code!" });
+    // 3. Inform user if they have zero configured matching credentials for the targeted sequence loop
+    if (!completedSuccessfully) {
+      const activeKeysMatch = providersToTry.some(p => savedProviders.some(sp => sp.provider === p));
+      if (!activeKeysMatch) {
+        const primaryTargetProvider = selectedModel.startsWith("gemini") ? "gemini" : 
+                                      selectedModel.startsWith("gpt") ? "openai" : 
+                                      selectedModel.startsWith("claude") ? "anthropic" : selectedModel;
+        setMessages((prev) => [...prev, {
+          id: crypto.randomUUID(), 
+          role: "assistant", 
+          content: `⚠️ No active key found for "${primaryTargetProvider}". Please use the "API Keys" button to get connected.`, 
+          timestamp: new Date()
+        }]);
       }
-    } else {
-      setMessages((prev) => [...prev, {
-        id: crypto.randomUUID(), role: "assistant", content: `❌ Error: All configured fallback routes exhausted. Last error: ${lastErrorMessage}`, timestamp: new Date()
-      }]);
     }
 
     setIsGenerating(false);
@@ -373,7 +390,6 @@ export default function Dashboard() {
               <Sparkles className="h-6 w-6 text-indigo-600" />
               <span>VibeCoder</span>
             </div>
-            
             <button 
               onClick={() => setIsKeyPanelOpen(true)} 
               className="flex items-center gap-2 text-sm font-bold text-white bg-gradient-to-r from-indigo-600 via-sky-500 to-emerald-500 px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg hover:opacity-90 transition-all hover:-translate-y-0.5"
@@ -559,7 +575,6 @@ export default function Dashboard() {
               
               {/* TOP HALF: Editor & Live Preview */}
               <div className="flex-1 min-h-[50%] border-b border-slate-200 flex flex-row overflow-hidden">
-                
                 {/* Code Editor */}
                 <div className="flex-1 border-r border-slate-200 p-4 flex flex-col min-w-0">
                   <div className="text-xs font-semibold text-slate-500 tracking-wider uppercase mb-2 flex items-center justify-between shrink-0">
@@ -596,7 +611,6 @@ export default function Dashboard() {
                     />
                   </div>
                 </div>
-
               </div>
 
               {/* BOTTOM HALF: Chat Interface */}
@@ -616,7 +630,7 @@ export default function Dashboard() {
                       </div>
                       <div className={`rounded-xl px-4 py-3 text-sm leading-relaxed shadow-sm ${msg.role === "user" ? "bg-slate-900 text-white font-medium" : "bg-white border border-slate-200 text-slate-800"}`}>
                         <p className="whitespace-pre-wrap">{msg.content}</p>
-                        <span className="block text-[10px] mt-1.5 text-right opacity-60">{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span className={`block text-[10px] mt-1.5 text-right opacity-60`}>{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                     </div>
                   ))}
@@ -659,7 +673,7 @@ export default function Dashboard() {
                       <div key={cred.id} className="flex justify-between items-center p-3 bg-white border border-slate-200 rounded-xl shadow-sm">
                         <div className="flex items-center gap-2">
                           <p className="font-bold text-sm text-slate-800">{cred.label}</p>
-                          <span className="bg-slate-900 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">Default</span>
+                          <span className="bg-slate-900 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">Saved</span>
                           <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                         </div>
                         <div className="flex gap-3">
@@ -692,7 +706,7 @@ export default function Dashboard() {
                     
                     <div>
                       <label className="text-xs font-medium text-slate-700 mb-1.5 flex items-center gap-1">Get a key <ArrowRight className="h-3 w-3 -rotate-45" /></label>
-                      <input type="password" placeholder="Starts with AIza..." value={inputKey} onChange={(e) => setInputKey(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg text-sm shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20 mb-3" />
+                      <input type="password" placeholder="Enter API Key Secret" value={inputKey} onChange={(e) => setInputKey(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg text-sm shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20 mb-3" />
                       <input type="text" placeholder="Label (optional)" value={customLabel} onChange={(e) => setCustomLabel(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg text-sm shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20" />
                     </div>
 
