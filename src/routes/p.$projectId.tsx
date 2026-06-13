@@ -52,55 +52,71 @@ interface Project {
   fileCount: number;
 }
 
-// Configuration helper to resolve live endpoints and standard model identifiers for all fallback providers
+// 🌐 Dynamic Endpoint & Header Generator for Live Fallbacks
 const getProviderConfig = (provider: KeyProvider, selectedModel: string) => {
   switch (provider) {
     case "openai":
       return {
         url: "https://api.openai.com/v1/chat/completions",
         model: selectedModel.startsWith("gpt") ? selectedModel : "gpt-4o",
+        headers: (key: string) => ({ "Authorization": `Bearer ${key}` }),
         format: "openai" as const
       };
     case "anthropic":
       return {
         url: "https://api.anthropic.com/v1/messages",
         model: selectedModel.startsWith("claude") ? selectedModel : "claude-3-7-sonnet-20250219",
+        headers: (key: string) => ({
+          "x-api-key": key,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-profiles-allowed": "true"
+        }),
         format: "anthropic" as const
       };
     case "deepseek":
       return {
         url: "https://api.deepseek.com/v1/chat/completions",
         model: "deepseek-chat",
+        headers: (key: string) => ({ "Authorization": `Bearer ${key}` }),
         format: "openai" as const
       };
     case "groq":
       return {
         url: "https://api.groq.com/openai/v1/chat/completions",
         model: "llama3-8b-8192",
+        headers: (key: string) => ({ "Authorization": `Bearer ${key}` }),
         format: "openai" as const
       };
     case "mistral":
       return {
         url: "https://api.mistral.ai/v1/chat/completions",
         model: "mistral-large-latest",
+        headers: (key: string) => ({ "Authorization": `Bearer ${key}` }),
         format: "openai" as const
       };
     case "openrouter":
       return {
         url: "https://openrouter.ai/api/v1/chat/completions",
         model: "google/gemini-2.5-flash",
+        headers: (key: string) => ({
+          "Authorization": `Bearer ${key}`,
+          "HTTP-Origin": window.location.origin,
+          "Title": "VibeCoder"
+        }),
         format: "openai" as const
       };
     case "local":
       return {
         url: "http://localhost:11434/v1/chat/completions",
         model: "llama3",
+        headers: () => ({}),
         format: "openai" as const
       };
     default:
       return {
         url: "https://api.openai.com/v1/chat/completions",
         model: selectedModel,
+        headers: (key: string) => ({ "Authorization": `Bearer ${key}` }),
         format: "openai" as const
       };
   }
@@ -217,13 +233,25 @@ export default function Dashboard() {
     setSelectedModel(model);
   };
 
+  // ✅ FIX 1: Real Network Probe for testing Key Health validation across any provider
   const runKeyValidationProbe = async (provider: KeyProvider, secretKey: string): Promise<boolean> => {
     try {
       if (provider === "gemini") {
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${secretKey}`);
         return res.status === 200;
       }
-      return true;
+      
+      const config = getProviderConfig(provider, "default");
+      const testBody = config.format === "openai" 
+        ? { model: config.model, messages: [{ role: "user", content: "ping" }], max_tokens: 5 }
+        : { model: config.model, messages: [{ role: "user", content: "ping" }], max_tokens: 5 };
+
+      const res = await fetch(config.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...config.headers(secretKey) },
+        body: JSON.stringify(testBody)
+      });
+      return res.ok;
     } catch {
       return false;
     }
@@ -239,10 +267,10 @@ export default function Dashboard() {
       setSavedProviders((prev) => [...prev, {
         id: crypto.randomUUID(), provider: keyProvider, label: customLabel.trim() || `${keyProvider} Key`, key: inputKey.trim(),
       }]);
-      setNotification({ type: "success", message: "Key works! You are ready to build." });
+      setNotification({ type: "success", message: "Key works! Added to pipeline wallet." });
       setInputKey(""); setCustomLabel("");
     } else {
-      setNotification({ type: "error", message: "Key is not working. Please check it and try again." });
+      setNotification({ type: "error", message: "Key authentication probe failed. Check credentials." });
     }
   };
 
@@ -250,7 +278,7 @@ export default function Dashboard() {
     setTestingKeyId(cred.id);
     const isValid = await runKeyValidationProbe(cred.provider, cred.key);
     setTestingKeyId(null);
-    setNotification({ type: isValid ? "success" : "error", message: isValid ? "Key works" : "Key is not working" });
+    setNotification({ type: isValid ? "success" : "error", message: isValid ? "Key connection online" : "Key authentication dead" });
   };
 
   const handleDeleteCredential = (id: string) => {
@@ -267,7 +295,7 @@ export default function Dashboard() {
   };
 
   const simulateErrorAndFix = () => {
-    const mockError = `Uncaught TypeError: Cannot read properties of undefined (reading 'map')\n    at RenderList (App.tsx:42:15)\n    at React Component Tree`;
+    const mockError = `Uncaught TypeError: Cannot read properties of undefined (reading 'map')\n    at RenderList (App.tsx:42:15)`;
     const errorPrompt = `I am getting this error in my preview console. Please analyze the code and provide a fix:\n\n${mockError}`;
     sendToAI(errorPrompt);
   };
@@ -278,8 +306,7 @@ export default function Dashboard() {
     const rawPrompt = chatInput.trim();
     
     if (messages.length === 1 && recentProjects.length === 0) {
-      const readableName = rawPrompt.length > 32 ?
-        rawPrompt.substring(0, 32) + "..." : rawPrompt;
+      const readableName = rawPrompt.length > 32 ? rawPrompt.substring(0, 32) + "..." : rawPrompt;
       setRecentProjects(prev => [
         { id: crypto.randomUUID(), name: readableName, date: new Date(), fileCount: 1 },
         ...prev
@@ -297,6 +324,7 @@ export default function Dashboard() {
     return match ? match[1].trim() : null;
   };
 
+  // ✅ FIX 2: Production-Ready Fallback Execution Loop
   const sendToAI = async (messageText: string) => {
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(), role: "user", content: messageText, timestamp: new Date()
@@ -314,28 +342,25 @@ export default function Dashboard() {
       ? basePrompt + "\n\nCRITICAL INSTRUCTION: You must start your response with a numbered list outlining your step-by-step plan before writing ANY code blocks."
       : basePrompt;
 
-    // 1. Detect intended primary engine provider setup
     const primaryProvider = selectedModel.startsWith("gemini") ? "gemini" : 
                             selectedModel.startsWith("gpt") ? "openai" : 
                             selectedModel.startsWith("claude") ? "anthropic" : 
                             (selectedModel as KeyProvider);
 
-    // 2. Build ordered pipeline sequence (Primary goes first, then any other saved fallback credentials)
+    // Assembly line ordering: primary provider goes first, then everything else inside the key wallet acts as fallbacks
     const providersToTry: KeyProvider[] = [];
     if (savedProviders.find(p => p.provider === primaryProvider)) {
       providersToTry.push(primaryProvider);
     }
     savedProviders.forEach(p => {
-      if (!providersToTry.includes(p.provider)) {
-        providersToTry.push(p.provider);
-      }
+      if (!providersToTry.includes(p.provider)) providersToTry.push(p.provider);
     });
 
     if (providersToTry.length === 0) {
       setMessages((prev) => [...prev, {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: `⚠️ No active key found. Please configuration wallet with the "API Keys" button to start text generation pipelines.`,
+        content: `⚠️ No active key found. Please configure your key credentials using the "API Keys" button to begin generating code.`,
         timestamp: new Date()
       }]);
       setIsGenerating(false);
@@ -344,7 +369,7 @@ export default function Dashboard() {
 
     let completedSuccessfully = false;
 
-    // 3. Sequential dynamic failover routing loop
+    // Cascade Failover Loop through your added keys
     for (let i = 0; i < providersToTry.length; i++) {
       const currentProvider = providersToTry[i];
       const activeCredential = savedProviders.find(p => p.provider === currentProvider);
@@ -355,7 +380,7 @@ export default function Dashboard() {
         setMessages((prev) => [...prev, {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: `🔄 Automatically switching to dynamic fallback backup engine: "${activeCredential.label}" (${currentProvider})`,
+          content: `🔄 Switched to operational backup fallback engine: "${activeCredential.label}" (${currentProvider})`,
           timestamp: new Date()
         }]);
       }
@@ -373,74 +398,43 @@ export default function Dashboard() {
             })
           });
 
-          if (!res.ok) {
-            const errBody = await res.json().catch(() => ({}));
-            throw new Error(errBody.error?.message || `HTTP error ${res.status}`);
-          }
-
+          if (!res.ok) throw new Error(`Gemini Server Error (${res.status})`);
           const data = await res.json();
           aiResponseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "No legible response returned.";
 
         } else {
-          // LIVE INTERCEPT: Fetches live completions for OpenAI / DeepSeek / Groq / Mistral / OpenRouter / Anthropic
+          // Live API connection calls for OpenAI, Anthropic, DeepSeek, Groq, OpenRouter, etc.
           const config = getProviderConfig(currentProvider, selectedModel);
 
-          if (config.format === "openai") {
-            const res = await fetch(config.url, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${activeCredential.key}`,
-                ...(currentProvider === "openrouter" ? {
-                  "HTTP-Origin": window.location.origin,
-                  "Title": "VibeCoder"
-                } : {})
-              },
-              body: JSON.stringify({
-                model: config.model,
-                messages: [
-                  { role: "system", content: finalSystemPrompt },
-                  { role: "user", content: `Here is the current code in the sandbox:\n\n${code}\n\nUser request: ${messageText}` }
-                ],
-                temperature: 0.2
-              })
-            });
+          const payload = config.format === "openai" ? {
+            model: config.model,
+            messages: [
+              { role: "system", content: finalSystemPrompt },
+              { role: "user", content: `Here is the current code in the sandbox:\n\n${code}\n\nUser request: ${messageText}` }
+            ],
+            temperature: 0.2
+          } : {
+            model: config.model,
+            max_tokens: 4000,
+            system: finalSystemPrompt,
+            messages: [{ role: "user", content: `Here is the current code in the sandbox:\n\n${code}\n\nUser request: ${messageText}` }]
+          };
 
-            if (!res.ok) {
-              const errBody = await res.json().catch(() => ({}));
-              throw new Error(errBody.error?.message || `HTTP error ${res.status}`);
-            }
+          const res = await fetch(config.url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...config.headers(activeCredential.key) },
+            body: JSON.stringify(payload)
+          });
 
-            const data = await res.json();
-            aiResponseText = data.choices?.[0]?.message?.content || "";
-
-          } else if (config.format === "anthropic") {
-            const res = await fetch(config.url, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "x-api-key": activeCredential.key,
-                "anthropic-version": "2023-06-01",
-                "anthropic-dangerous-direct-profiles-allowed": "true"
-              },
-              body: JSON.stringify({
-                model: config.model,
-                max_tokens: 4000,
-                system: finalSystemPrompt,
-                messages: [
-                  { role: "user", content: `Here is the current code in the sandbox:\n\n${code}\n\nUser request: ${messageText}` }
-                ]
-              })
-            });
-
-            if (!res.ok) {
-              const errBody = await res.json().catch(() => ({}));
-              throw new Error(errBody.error?.message || `HTTP error ${res.status}`);
-            }
-
-            const data = await res.json();
-            aiResponseText = data.content?.[0]?.text || "";
+          if (!res.ok) {
+            const errorDetails = await res.json().catch(() => ({}));
+            throw new Error(errorDetails.error?.message || `HTTP error ${res.status}`);
           }
+
+          const data = await res.json();
+          aiResponseText = config.format === "openai" 
+            ? data.choices?.[0]?.message?.content || "" 
+            : data.content?.[0]?.text || "";
         }
 
         setMessages((prev) => [...prev, {
@@ -450,14 +444,14 @@ export default function Dashboard() {
         const newCode = extractCode(aiResponseText);
         if (newCode) {
           setCode(newCode);
-          setNotification({ type: "success", message: `Sandbox updated via backup: ${currentProvider}!` });
+          setNotification({ type: "success", message: `Sandbox updated via backup pipeline: ${currentProvider}!` });
         }
 
         completedSuccessfully = true;
-        break; // Successfully fulfilled request, breakout cascade track
+        break; // Stop loop, request successfully finished.
 
       } catch (err) {
-        console.warn(`Provider [${currentProvider}] pipeline failed:`, err);
+        console.warn(`Pipeline engine [${currentProvider}] error:`, err);
         setMessages((prev) => [...prev, {
           id: crypto.randomUUID(),
           role: "assistant",
@@ -688,7 +682,6 @@ export default function Dashboard() {
 
             {/* MAIN WORKSPACE AREA */}
             <div className="flex flex-1 flex-col overflow-hidden bg-white">
-              
               {/* TOP HALF: Editor & Live Preview */}
               <div className="flex-1 min-h-[50%] border-b border-slate-200 flex flex-row overflow-hidden">
                 {/* Code Editor */}
