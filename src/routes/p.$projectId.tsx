@@ -328,7 +328,6 @@ export default function Dashboard() {
       id: crypto.randomUUID(), role: "user", content: messageText, timestamp: new Date()
     };
     
-    // Create a local snapshot of messages including the new one to parse for history
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
     setIsGenerating(true);
@@ -343,8 +342,6 @@ export default function Dashboard() {
       ? basePrompt + "\n\nCRITICAL INSTRUCTION: You must start your response with a numbered list outlining your step-by-step plan before writing ANY code blocks."
       : basePrompt;
 
-    // 📚 SCRAPE AND FORMAT SAFE CONVERSATION HISTORY
-    // Filter out system warning banners and consolidate identical back-to-back roles so APIs don't crash
     const safeHistory: { role: string, content: string }[] = [];
     for (const m of messages) {
       if (m.id === "welcome" || m.content.startsWith("⚠️") || m.content.startsWith("🔄") || m.content.startsWith("❌")) continue;
@@ -401,15 +398,14 @@ export default function Dashboard() {
       try {
         let aiResponseText = "";
 
-        if (currentProvider === "gemini") {
-          // 🛑 CONVERSATIONAL MEMORY TEST TRIGGER
-          if (messageText.includes("SIMULATE CRASH")) {
-            throw new Error("User initiated manual failover test via 'SIMULATE CRASH' command.");
-          }
+        // 🛑 CONVERSATIONAL MEMORY TEST TRIGGER (Works on ANY active primary provider)
+        if (messageText.includes("SIMULATE CRASH") && i === 0) {
+          throw new Error("User initiated manual failover test via 'SIMULATE CRASH' command.");
+        }
 
+        if (currentProvider === "gemini") {
           const targetModelName = selectedModel.includes("pro") ? "gemini-2.5-pro" : "gemini-2.5-flash";
           
-          // Inject history into Gemini payload
           const geminiHistory = safeHistory.map(m => ({
             role: m.role === "user" ? "user" : "model",
             parts: [{ text: m.content }]
@@ -433,7 +429,6 @@ export default function Dashboard() {
         } else {
           const config = getProviderConfig(currentProvider, selectedModel);
 
-          // Inject history into standard OpenAI/Anthropic payloads
           const payload = config.format === "openai" ? {
             model: config.model,
             messages: [
