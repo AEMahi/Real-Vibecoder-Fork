@@ -1,10 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
-import Editor from "@monaco-editor/react";
 import { 
   Key, X, Trash2, CheckCircle2, AlertTriangle, RefreshCw, 
-  Send, Bot, User, Sparkles, Plus, ListTodo, Timer, Wrench, RotateCcw, Play, Home, ArrowRight, LayoutTemplate
+  Send, Bot, User, Sparkles, Plus, ListTodo, Timer, Wrench, RotateCcw, Play, Home, ArrowRight, LayoutTemplate, Github
 } from "lucide-react";
+
+// --- Fallback Mock for Canvas Preview ---
+const createFileRoute = (path: string) => (config: any) => config.component;
+const Editor = ({ value, onChange, language }: any) => (
+  <textarea 
+    value={value} 
+    onChange={(e) => onChange?.(e.target.value)} 
+    className="w-full h-full p-4 font-mono text-[13px] leading-relaxed bg-white text-slate-800 outline-none resize-none"
+    spellCheck={false}
+    placeholder={`// Editor empty. Language: ${language}`}
+  />
+);
+// ----------------------------------------
 
 export const Route = createFileRoute("/p/$projectId")({
   component: Dashboard,
@@ -52,7 +64,7 @@ interface Project {
   fileCount: number;
 }
 
-// Support for multiple files
+// Support for multiple dynamic files
 interface FileObj {
   name: string;
   language: string;
@@ -140,12 +152,12 @@ export default function Dashboard() {
   });
   const [selectedModel, setSelectedModel] = useState<AIModel>("gemini-2.5-flash");
   
-  // 1. Files state replaces single code state
+  // 1. Files state handles dynamically created files
   const [files, setFiles] = useState<FileObj[]>([
     {
       name: "index.html",
       language: "html",
-      content: `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>VibeCoder Sandbox</title>\n</head>\n<body>\n  <div class="card">\n    <h1>Hello, VibeCoder! ✨</h1>\n    <p>I am your multi-file live execution sandbox.</p>\n  </div>\n</body>\n</html>`
+      content: `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>VibeCoder Sandbox</title>\n</head>\n<body>\n  <div class="card">\n    <h1>Hello, VibeCoder! ✨</h1>\n    <p>I am your dynamic multi-file live execution sandbox.</p>\n  </div>\n</body>\n</html>`
     },
     {
       name: "styles.css",
@@ -186,24 +198,32 @@ export default function Dashboard() {
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // 2. Bundles the files dynamically for the iframe
+  // 2. Bundles the dynamic files dynamically for the iframe
   const bundledPreview = () => {
-    const html = files.find(f => f.name === "index.html")?.content || "";
-    const css = files.find(f => f.name === "styles.css")?.content || "";
-    const js = files.find(f => f.name === "script.js")?.content || "";
+    // Find main HTML file
+    const htmlFile = files.find(f => f.name.endsWith('.html') || f.language === 'html');
+    let doc = htmlFile ? htmlFile.content : "<div style='padding: 20px; font-family: sans-serif;'>No HTML file found in workspace.</div>";
     
-    let doc = html;
-    if (css && doc.includes('</head>')) {
-        doc = doc.replace('</head>', `<style>\n${css}\n</style>\n</head>`);
-    } else if (css) {
-        doc = `<style>\n${css}\n</style>\n` + doc;
+    // Concatenate all CSS files
+    const cssFiles = files.filter(f => f.name.endsWith('.css') || f.language === 'css');
+    const combinedCSS = cssFiles.map(f => `/* ${f.name} */\n${f.content}`).join('\n\n');
+    
+    // Concatenate all JS files
+    const jsFiles = files.filter(f => ['javascript', 'js', 'ts', 'jsx', 'tsx'].includes(f.language) || f.name.endsWith('.js'));
+    const combinedJS = jsFiles.map(f => `/* ${f.name} */\n${f.content}`).join('\n\n');
+    
+    if (combinedCSS && doc.includes('</head>')) {
+        doc = doc.replace('</head>', `<style>\n${combinedCSS}\n</style>\n</head>`);
+    } else if (combinedCSS) {
+        doc = `<style>\n${combinedCSS}\n</style>\n` + doc;
     }
 
-    if (js && doc.includes('</body>')) {
-        doc = doc.replace('</body>', `<script>\n${js}\n</script>\n</body>`);
-    } else if (js) {
-        doc += `\n<script>\n${js}\n</script>`;
+    if (combinedJS && doc.includes('</body>')) {
+        doc = doc.replace('</body>', `<script>\n${combinedJS}\n</script>\n</body>`);
+    } else if (combinedJS) {
+        doc += `\n<script>\n${combinedJS}\n</script>`;
     }
+    
     return doc;
   };
 
@@ -233,6 +253,12 @@ export default function Dashboard() {
   const handleDeleteProject = (projectId: string) => {
     setRecentProjects((prev) => prev.filter((p) => p.id !== projectId));
     setNotification({ type: "success", message: "Project deleted successfully." });
+  };
+
+  const handleExportGitHub = async () => {
+    // TODO: Wire up to local git backend
+    // Example: await fetch('/api/export', { method: 'POST', body: JSON.stringify({ files }) });
+    setNotification({ type: "success", message: "Ready for GitHub export! (Connect to local backend API)" });
   };
 
   const toggleFeature = (feature: keyof typeof activeFeatures) => {
@@ -320,7 +346,7 @@ export default function Dashboard() {
     if (messages.length === 1 && recentProjects.length === 0) {
       const readableName = rawPrompt.length > 32 ? rawPrompt.substring(0, 32) + "..." : rawPrompt;
       setRecentProjects(prev => [
-        { id: crypto.randomUUID(), name: readableName, date: new Date(), fileCount: 3 },
+        { id: crypto.randomUUID(), name: readableName, date: new Date(), fileCount: files.length },
         ...prev
       ]);
     }
@@ -329,36 +355,39 @@ export default function Dashboard() {
     sendToAI(rawPrompt);
   };
 
-  // 3. Replaces extractCode to handle 3 files safely
+  // 3. Robust dynamic file extraction (uses char code to prevent esbuild regex break)
   const extractFiles = (text: string, currentFiles: FileObj[]): FileObj[] | null => {
     const ticks = String.fromCharCode(96, 96, 96);
-    const htmlPattern = new RegExp(ticks + 'html\\n([\\s\\S]*?)' + ticks, 'i');
-    const cssPattern = new RegExp(ticks + 'css\\n([\\s\\S]*?)' + ticks, 'i');
-    const jsPattern = new RegExp(ticks + '(?:javascript|js)\\n([\\s\\S]*?)' + ticks, 'i');
-
-    const htmlMatch = text.match(htmlPattern);
-    const cssMatch = text.match(cssPattern);
-    const jsMatch = text.match(jsPattern);
-
-    if (htmlMatch || cssMatch || jsMatch) {
-      return [
-        { name: "index.html", language: "html", content: htmlMatch ? htmlMatch[1].trim() : (currentFiles.find(f => f.name === "index.html")?.content || "") },
-        { name: "styles.css", language: "css", content: cssMatch ? cssMatch[1].trim() : (currentFiles.find(f => f.name === "styles.css")?.content || "") },
-        { name: "script.js", language: "javascript", content: jsMatch ? jsMatch[1].trim() : (currentFiles.find(f => f.name === "script.js")?.content || "") }
-      ];
-    }
-
-    const pattern = new RegExp(ticks + '(?:[a-z]*\\n)?([\\s\\S]*?)' + ticks, 'i');
-    const match = text.match(pattern);
+    // Regex matching any code block and optionally reading the filename after a colon
+    const blockRegex = new RegExp(ticks + '([a-z0-9]+)(?:[:|\\|]([^\\n]+))?\\n([\\s\\S]*?)' + ticks, 'gi');
     
-    if (match) {
-      return [
-        { name: "index.html", language: "html", content: match[1].trim() },
-        { name: "styles.css", language: "css", content: currentFiles.find(f => f.name === "styles.css")?.content || "" },
-        { name: "script.js", language: "javascript", content: currentFiles.find(f => f.name === "script.js")?.content || "" }
-      ];
+    let match;
+    const updatedFiles = [...currentFiles];
+    let foundAny = false;
+
+    while ((match = blockRegex.exec(text)) !== null) {
+      foundAny = true;
+      const lang = match[1].toLowerCase();
+      let name = match[2] ? match[2].trim() : '';
+      const content = match[3].trim();
+
+      // Guess a filename if the AI just gave us the language
+      if (!name) {
+        if (lang === 'html') name = 'index.html';
+        else if (lang === 'css') name = 'styles.css';
+        else if (['javascript', 'js', 'ts', 'jsx', 'tsx'].includes(lang)) name = 'script.js';
+        else name = `file.${lang}`;
+      }
+
+      const existingIdx = updatedFiles.findIndex(f => f.name === name);
+      if (existingIdx >= 0) {
+        updatedFiles[existingIdx] = { name, language: lang, content };
+      } else {
+        updatedFiles.push({ name, language: lang, content });
+      }
     }
-    return null;
+
+    return foundAny ? updatedFiles : null;
   };
 
   const sendToAI = async (messageText: string) => {
@@ -371,15 +400,16 @@ export default function Dashboard() {
     setIsGenerating(true);
 
     if (activeFeatures.checkpoints) {
+      // Snapshot the current files array
       setCodeHistory(prev => [...prev, JSON.parse(JSON.stringify(files))]);
     }
 
     const blockLabel = String.fromCharCode(96, 96, 96);
     const basePrompt = systemPrompt.trim() ||
-      `You are an expert full-stack developer assistant. CRITICAL: When writing or updating code, you MUST output your solution in separate markdown code blocks: one for HTML (${blockLabel}html), one for CSS (${blockLabel}css), and one for JavaScript (${blockLabel}javascript). Output the raw elements, styles, and logic for each file separately so they can be parsed into a multi-file system.`;
+      `You are an expert full-stack developer assistant. CRITICAL: When writing or updating code, you MUST output your solution in separate markdown code blocks. You can create as many files as necessary. ALWAYS include the filename in the block header like this: ${blockLabel}html:index.html or ${blockLabel}css:styles.css or ${blockLabel}javascript:app.js. Output the raw elements, styles, and logic for each file separately so they can be parsed into a dynamic multi-file system.`;
     
     const finalSystemPrompt = activeFeatures.planMode 
-      ? (systemPrompt.trim() || "You are an expert full-stack developer assistant.") + "\n\nCRITICAL INSTRUCTION: You are currently in PLAN MODE. You must ONLY output a numbered step-by-step plan outlining how to solve the request. DO NOT output any code blocks. DO NOT write HTML, CSS, or JavaScript. Wait until the user disables Plan Mode before writing actual code."
+      ? (systemPrompt.trim() || "You are an expert full-stack developer assistant.") + "\n\nCRITICAL INSTRUCTION: You are currently in PLAN MODE. You must ONLY output a numbered step-by-step plan outlining how to solve the request. DO NOT output any code blocks. Wait until the user disables Plan Mode before writing actual code."
       : basePrompt;
 
     const safeHistory: { role: string, content: string }[] = [];
@@ -420,7 +450,7 @@ export default function Dashboard() {
 
     let completedSuccessfully = false;
     
-    // Provide AI context of all 3 files safely
+    // Provide AI context of ALL files dynamically
     const tickMarks = String.fromCharCode(96, 96, 96);
     const currentCodeContext = files.map(f => `File: ${f.name}\n${tickMarks}${f.language}\n${f.content}\n${tickMarks}`).join('\n\n');
 
@@ -511,7 +541,7 @@ export default function Dashboard() {
           id: crypto.randomUUID(), role: "assistant", content: aiResponseText, timestamp: new Date()
         }]);
 
-        // Extract updated blocks
+        // Extract updated blocks dynamically
         const newFiles = extractFiles(aiResponseText, files);
         if (newFiles) {
           setFiles(newFiles);
@@ -575,13 +605,15 @@ export default function Dashboard() {
               <Sparkles className="h-6 w-6 text-indigo-600" />
               <span>VibeCoder</span>
             </div>
-            <button 
-              onClick={() => setIsKeyPanelOpen(true)} 
-              className="flex items-center gap-2 text-sm font-bold text-white bg-gradient-to-r from-indigo-600 via-sky-500 to-emerald-500 px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg hover:opacity-90 transition-all hover:-translate-y-0.5"
-            >
-              <Key className="h-4 w-4" />
-              <span>API Providers</span>
-            </button>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setIsKeyPanelOpen(true)} 
+                className="flex items-center gap-2 text-sm font-bold text-white bg-gradient-to-r from-indigo-600 via-sky-500 to-emerald-500 px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg hover:opacity-90 transition-all hover:-translate-y-0.5"
+              >
+                <Key className="h-4 w-4" />
+                <span>API Providers</span>
+              </button>
+            </div>
           </header>
 
           <main className="flex-1 w-full max-w-3xl mx-auto py-16 px-6 animate-in fade-in duration-300">
@@ -686,7 +718,14 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="flex items-center gap-4 relative">
+            <div className="flex items-center gap-3 relative">
+              <button 
+                onClick={handleExportGitHub}
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-lg px-4 text-xs font-bold text-slate-700 bg-white border border-slate-200 shadow-sm hover:bg-slate-50 transition-all hover:-translate-y-[1px]"
+              >
+                <Github className="h-3.5 w-3.5" /><span>Export</span>
+              </button>
+
               <button 
                 onClick={() => setIsKeyPanelOpen(!isKeyPanelOpen)} 
                 className="inline-flex h-9 items-center justify-center gap-2 rounded-lg px-4 text-xs font-bold text-white bg-gradient-to-r from-indigo-600 via-sky-500 to-emerald-500 shadow-sm hover:shadow-md hover:opacity-90 transition-all hover:-translate-y-[1px]"
@@ -767,7 +806,7 @@ export default function Dashboard() {
                         <button
                           key={file.name}
                           onClick={() => setActiveFileName(file.name)}
-                          className={`px-4 py-2 text-xs font-semibold rounded-t-lg border border-b-0 transition-colors ${
+                          className={`px-4 py-2 text-xs font-semibold rounded-t-lg border border-b-0 transition-colors whitespace-nowrap ${
                             activeFileName === file.name 
                               ? "bg-white border-slate-200 text-indigo-600 shadow-[0_2px_0_0_white]" 
                               : "bg-slate-50 border-transparent text-slate-500 hover:bg-slate-200"
@@ -777,7 +816,7 @@ export default function Dashboard() {
                         </button>
                       ))}
                     </div>
-                    <div className="flex items-center gap-2 pb-2 pr-2">
+                    <div className="flex items-center gap-2 pb-2 pr-2 shrink-0">
                       {activeFeatures.autoFix && (
                         <button onClick={simulateErrorAndFix} disabled={isGenerating} className="px-2 py-1 rounded bg-amber-100 text-amber-800 text-[10px] uppercase font-bold flex items-center gap-1 hover:bg-amber-200 disabled:opacity-50">
                           <Wrench className="h-3 w-3" /> Simulate Error
@@ -793,10 +832,10 @@ export default function Dashboard() {
                   <div className="flex-1 w-full bg-white relative">
                     <Editor 
                       height="100%" 
-                      language={activeFile.language} 
+                      language={activeFile?.language || "javascript"} 
                       theme="light" 
-                      value={activeFile.content} 
-                      onChange={(value) => {
+                      value={activeFile?.content || ""} 
+                      onChange={(value: any) => {
                         setFiles(prev => prev.map(f => 
                           f.name === activeFileName ? { ...f, content: value || "" } : f
                         ));
