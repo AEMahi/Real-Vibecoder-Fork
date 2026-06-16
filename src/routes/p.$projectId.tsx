@@ -1,22 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
+import Editor from "@monaco-editor/react";
 import { 
   Key, X, Trash2, CheckCircle2, AlertTriangle, RefreshCw, 
   Send, Bot, User, Sparkles, Plus, ListTodo, Timer, Wrench, RotateCcw, Play, Home, ArrowRight, LayoutTemplate, Github
 } from "lucide-react";
-
-// --- Fallback Mock for Canvas Preview ---
-const createFileRoute = (path: string) => (config: any) => config.component;
-const Editor = ({ value, onChange, language }: any) => (
-  <textarea 
-    value={value} 
-    onChange={(e) => onChange?.(e.target.value)} 
-    className="w-full h-full p-4 font-mono text-[13px] leading-relaxed bg-white text-slate-800 outline-none resize-none"
-    spellCheck={false}
-    placeholder={`// Editor empty. Language: ${language}`}
-  />
-);
-// ----------------------------------------
 
 export const Route = createFileRoute("/p/$projectId")({
   component: Dashboard,
@@ -198,6 +186,13 @@ export default function Dashboard() {
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // GitHub Export States
+  const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
+  const [exportRepoName, setExportRepoName] = useState<string>("vibecoder-project");
+  const [githubToken, setGithubToken] = useState<string>("");
+  const [exportCommitMessage, setExportCommitMessage] = useState<string>("Code update by VibeCoder");
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+
   // 2. Bundles the dynamic files dynamically for the iframe
   const bundledPreview = () => {
     // Find main HTML file
@@ -255,10 +250,175 @@ export default function Dashboard() {
     setNotification({ type: "success", message: "Project deleted successfully." });
   };
 
+  // Dynamic Client-side GitHub Export Handler
   const handleExportGitHub = async () => {
-    // TODO: Wire up to local git backend
-    // Example: await fetch('/api/export', { method: 'POST', body: JSON.stringify({ files }) });
-    setNotification({ type: "success", message: "Ready for GitHub export! (Connect to local backend API)" });
+    setIsExportModalOpen(true);
+  };
+
+  const executeGitHubExport = async () => {
+    if (!githubToken.trim() || !exportRepoName.trim()) {
+      setNotification({ type: "error", message: "Missing Repository Name or Github Token." });
+      return;
+    }
+
+    setIsExporting(true);
+
+    try {
+      // 1. Get user details
+      const userRes = await fetch("https://api.github.com/user", {
+        headers: {
+          Authorization: `token ${githubToken.trim()}`,
+          Accept: "application/vnd.github.v3+json",
+        },
+      });
+
+      if (!userRes.ok) {
+        throw new Error("Invalid GitHub Access Token.");
+      }
+
+      const userData = await userRes.json();
+      const owner = userData.login;
+
+      // 2. Check repository existence
+      const repoCheckRes = await fetch(`https://api.github.com/repos/${owner}/${exportRepoName.trim()}`, {
+        headers: {
+          Authorization: `token ${githubToken.trim()}`,
+          Accept: "application/vnd.github.v3+json",
+        },
+      });
+
+      if (repoCheckRes.status === 404) {
+        // Create repository if it doesn't exist
+        const createRepoRes = await fetch("https://api.github.com/user/repos", {
+          method: "POST",
+          headers: {
+            Authorization: `token ${githubToken.trim()}`,
+            "Content-Type": "application/json",
+            Accept: "application/vnd.github.v3+json",
+          },
+          body: JSON.stringify({
+            name: exportRepoName.trim(),
+            description: "Built dynamically with VibeCoder",
+            auto_init: true,
+          }),
+        });
+
+        if (!createRepoRes.ok) {
+          throw new Error("Failed to auto-create GitHub Repository.");
+        }
+
+        // Wait a short time for GitHub to provision the repo
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+
+      // 3. Get reference head commit
+      const branchRes = await fetch(`https://api.github.com/repos/${owner}/${exportRepoName.trim()}/branches/main`, {
+        headers: {
+          Authorization: `token ${githubToken.trim()}`,
+          Accept: "application/vnd.github.v3+json",
+        },
+      });
+
+      let baseTreeSha: string | null = null;
+      let parentCommitSha: string | null = null;
+
+      if (branchRes.ok) {
+        const branchData = await branchRes.json();
+        parentCommitSha = branchData.commit.sha;
+        baseTreeSha = branchData.commit.commit.tree.sha;
+      }
+
+      // 4. Create blobs
+      const treeItems = [];
+      for (const file of files) {
+        const blobRes = await fetch(`https://api.github.com/repos/${owner}/${exportRepoName.trim()}/git/blobs`, {
+          method: "POST",
+          headers: {
+            Authorization: `token ${githubToken.trim()}`,
+            "Content-Type": "application/json",
+            Accept: "application/vnd.github.v3+json",
+          },
+          body: JSON.stringify({
+            content: file.content,
+            encoding: "utf-8",
+          }),
+        });
+
+        if (blobRes.ok) {
+          const blobData = await blobRes.json();
+          treeItems.push({
+            path: file.name,
+            mode: "100644",
+            type: "blob",
+            sha: blobData.sha,
+          });
+        }
+      }
+
+      // 5. Create tree
+      const treeRes = await fetch(`https://api.github.com/repos/${owner}/${exportRepoName.trim()}/git/trees`, {
+        method: "POST",
+        headers: {
+          Authorization: `token ${githubToken.trim()}`,
+          "Content-Type": "application/json",
+          Accept: "application/vnd.github.v3+json",
+        },
+        body: JSON.stringify({
+          tree: treeItems,
+          base_tree: baseTreeSha || undefined,
+        }),
+      });
+
+      if (!treeRes.ok) {
+        throw new Error("Failed to construct directory tree in repo.");
+      }
+      const treeData = await treeRes.json();
+
+      // 6. Create Git Commit
+      const commitRes = await fetch(`https://api.github.com/repos/${owner}/${exportRepoName.trim()}/git/commits`, {
+        method: "POST",
+        headers: {
+          Authorization: `token ${githubToken.trim()}`,
+          "Content-Type": "application/json",
+          Accept: "application/vnd.github.v3+json",
+        },
+        body: JSON.stringify({
+          message: exportCommitMessage || "Code update by VibeCoder",
+          tree: treeData.sha,
+          parents: parentCommitSha ? [parentCommitSha] : [],
+        }),
+      });
+
+      if (!commitRes.ok) {
+        throw new Error("Failed to generate Git Commit on repository.");
+      }
+      const commitData = await commitRes.json();
+
+      // 7. Update branch HEAD reference
+      const refUpdateRes = await fetch(`https://api.github.com/repos/${owner}/${exportRepoName.trim()}/git/refs/heads/main`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `token ${githubToken.trim()}`,
+          "Content-Type": "application/json",
+          Accept: "application/vnd.github.v3+json",
+        },
+        body: JSON.stringify({
+          sha: commitData.sha,
+          force: true,
+        }),
+      });
+
+      if (!refUpdateRes.ok) {
+        throw new Error("Failed to update branch reference head commit.");
+      }
+
+      setNotification({ type: "success", message: `Successfully pushed VibeCoder project to GitHub!` });
+      setIsExportModalOpen(false);
+    } catch (err) {
+      setNotification({ type: "error", message: (err as Error).message || "GitHub write pipeline failed." });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const toggleFeature = (feature: keyof typeof activeFeatures) => {
@@ -571,7 +731,7 @@ export default function Dashboard() {
         id: crypto.randomUUID(),
         role: "assistant",
         content: `❌ Failover routing path completely exhausted. None of your configured credentials processed the workspace update successfully.`,
-        timestamp: new Date()
+        timestamp: Date()
       }]);
     }
 
@@ -963,6 +1123,68 @@ export default function Dashboard() {
                       Add
                     </button>
                   </div>
+                </div>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* 🚀 NEW MODAL: GITHUB EXPORT */}
+      {isExportModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in duration-200">
+           <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl relative animate-in zoom-in-95 duration-200">
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Github className="h-5 w-5 text-indigo-600" /> Export to GitHub</h3>
+                <button onClick={() => setIsExportModalOpen(false)} className="text-slate-400 hover:text-slate-700 bg-white rounded-md p-1 border border-slate-200 shadow-sm"><X className="h-4 w-4" /></button>
+              </div>
+              
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-slate-500">
+                  Directly export your multi-file VibeCoder workspace folder directory structure to a GitHub Repository.
+                </p>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">GitHub Access Token</label>
+                    <input 
+                      type="password" 
+                      placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" 
+                      value={githubToken} 
+                      onChange={(e) => setGithubToken(e.target.value)} 
+                      className="w-full p-2.5 border border-slate-300 rounded-lg text-sm shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Repository Name</label>
+                    <input 
+                      type="text" 
+                      placeholder="vibecoder-project" 
+                      value={exportRepoName} 
+                      onChange={(e) => setExportRepoName(e.target.value)} 
+                      className="w-full p-2.5 border border-slate-300 rounded-lg text-sm shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Commit Message</label>
+                    <input 
+                      type="text" 
+                      placeholder="Code update by VibeCoder" 
+                      value={exportCommitMessage} 
+                      onChange={(e) => setExportCommitMessage(e.target.value)} 
+                      className="w-full p-2.5 border border-slate-300 rounded-lg text-sm shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20" 
+                    />
+                  </div>
+
+                  <button 
+                    onClick={executeGitHubExport} 
+                    disabled={isExporting || !githubToken.trim() || !exportRepoName.trim()} 
+                    className="w-full bg-slate-900 text-white p-2.5 rounded-lg text-sm font-bold shadow-md hover:bg-slate-800 disabled:opacity-50 transition-colors flex items-center justify-center gap-2 mt-2"
+                  >
+                    {isExporting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Github className="h-4 w-4" />}
+                    <span>{isExporting ? "Exporting..." : "Export Repository"}</span>
+                  </button>
                 </div>
               </div>
            </div>
