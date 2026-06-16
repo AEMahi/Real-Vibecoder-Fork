@@ -1,10 +1,34 @@
-import { createFileRoute } from "@tanstack/react-router";
+// ==========================================
+// LOCAL ENVIRONMENT NOTICE:
+// For your local project on your computer, please UNCOMMENT the two lines below:
+ import { createFileRoute } from "@tanstack/react-router";
+ import Editor from "@monaco-editor/react";
+// ==========================================
 import { useState, useEffect, useRef } from "react";
-import Editor from "@monaco-editor/react";
 import { 
   Key, X, Trash2, CheckCircle2, AlertTriangle, RefreshCw, 
-  Send, Bot, User, Sparkles, Plus, ListTodo, Timer, Wrench, RotateCcw, Play, Home, ArrowRight, LayoutTemplate, Github
+  Send, Bot, User, Sparkles, Plus, ListTodo, Timer, Wrench, RotateCcw, Play, Home, ArrowRight, LayoutTemplate, Github, Maximize2, Minimize2
 } from "lucide-react";
+
+// --- PREVIEW ENVIRONMENT SAFE FALLBACK MOCKS ---
+// These allow the code to compile instantly in the online preview browser.
+// They can remain here as safe fallbacks when the live compiler runs.
+const createFileRoute = (path: string) => (config: any) => {
+  return {
+    useParams: () => ({ projectId: "local-dev-workspace" })
+  };
+};
+
+const Editor = ({ value, onChange, language }: any) => (
+  <textarea 
+    value={value} 
+    onChange={(e) => onChange?.(e.target.value)} 
+    className="w-full h-full p-4 font-mono text-[13px] leading-relaxed bg-white text-slate-800 outline-none resize-none border-0"
+    spellCheck={false}
+    placeholder={`// Editor empty. Language: ${language}`}
+  />
+);
+// ----------------------------------------------
 
 export const Route = createFileRoute("/p/$projectId")({
   component: Dashboard,
@@ -130,6 +154,9 @@ const getProviderConfig = (provider: KeyProvider, selectedModel: string) => {
 };
 
 export default function Dashboard() {
+  // Extract Route Parameter dynamically using TanStack Route params
+  const { projectId } = Route.useParams();
+
   const [currentPage, setCurrentPage] = useState<PageView>("home");
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
   const [activeFeatures, setActiveFeatures] = useState({
@@ -186,6 +213,9 @@ export default function Dashboard() {
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Panel expansion states
+  const [expandedPanel, setExpandedPanel] = useState<"code" | "preview" | "chat" | null>(null);
+
   // GitHub Export States
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const [exportRepoName, setExportRepoName] = useState<string>("vibecoder-project");
@@ -193,7 +223,7 @@ export default function Dashboard() {
   const [exportCommitMessage, setExportCommitMessage] = useState<string>("Code update by VibeCoder");
   const [isExporting, setIsExporting] = useState<boolean>(false);
 
-  // 2. Bundles the dynamic files dynamically for the iframe
+  // Bundles the dynamic files dynamically for the iframe
   const bundledPreview = () => {
     // Find main HTML file
     const htmlFile = files.find(f => f.name.endsWith('.html') || f.language === 'html');
@@ -515,7 +545,7 @@ export default function Dashboard() {
     sendToAI(rawPrompt);
   };
 
-  // 3. Robust dynamic file extraction (uses char code to prevent esbuild regex break)
+  // Robust dynamic file extraction (uses char code to prevent esbuild regex break)
   const extractFiles = (text: string, currentFiles: FileObj[]): FileObj[] | null => {
     const ticks = String.fromCharCode(96, 96, 96);
     // Regex matching any code block and optionally reading the filename after a colon
@@ -716,7 +746,7 @@ export default function Dashboard() {
         break; 
 
       } catch (err) {
-        console.warn(`Pipeline engine [${currentProvider}] error:`, err);
+        console.warn("Pipeline engine error:", err);
         setMessages((prev) => [...prev, {
           id: crypto.randomUUID(),
           role: "assistant",
@@ -731,7 +761,7 @@ export default function Dashboard() {
         id: crypto.randomUUID(),
         role: "assistant",
         content: `❌ Failover routing path completely exhausted. None of your configured credentials processed the workspace update successfully.`,
-        timestamp: Date()
+        timestamp: new Date()
       }]);
     }
 
@@ -874,7 +904,7 @@ export default function Dashboard() {
               <div className="h-4 w-px bg-slate-200" />
               <div className="flex items-center gap-2 font-semibold">
                 <Sparkles className="h-5 w-5 text-indigo-600 animate-pulse" />
-                <span className="text-slate-800 text-sm font-bold tracking-tight">Active Workspace</span>
+                <span className="text-slate-800 text-sm font-bold tracking-tight">Active Workspace: {projectId}</span>
               </div>
             </div>
 
@@ -956,10 +986,138 @@ export default function Dashboard() {
 
             {/* MAIN WORKSPACE AREA */}
             <div className="flex flex-1 flex-col overflow-hidden bg-white">
-              {/* TOP HALF: Editor & Live Preview */}
-              <div className="flex-1 min-h-[50%] border-b border-slate-200 flex flex-row overflow-hidden">
-                {/* 4. Tabbed Code Editor */}
-                <div className="flex-1 border-r border-slate-200 flex flex-col min-w-0 bg-slate-50">
+              {/* Dynamic Sizing View Container based on expanded state */}
+              {expandedPanel === null && (
+                <>
+                  {/* TOP HALF: Editor & Live Preview */}
+                  <div className="flex-1 min-h-[50%] border-b border-slate-200 flex flex-row overflow-hidden">
+                    {/* 4. Tabbed Code Editor */}
+                    <div className="flex-1 border-r border-slate-200 flex flex-col min-w-0 bg-slate-50">
+                      <div className="flex items-center justify-between bg-slate-100 border-b border-slate-200 px-2 pt-2 shrink-0">
+                        <div className="flex gap-1 overflow-x-auto custom-scrollbar">
+                          {files.map((file) => (
+                            <button
+                              key={file.name}
+                              onClick={() => setActiveFileName(file.name)}
+                              className={`px-4 py-2 text-xs font-semibold rounded-t-lg border border-b-0 transition-colors whitespace-nowrap ${
+                                activeFileName === file.name 
+                                  ? "bg-white border-slate-200 text-indigo-600 shadow-[0_2px_0_0_white]" 
+                                  : "bg-slate-50 border-transparent text-slate-500 hover:bg-slate-200"
+                              }`}
+                            >
+                              {file.name}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-2 pb-2 pr-2 shrink-0">
+                          {activeFeatures.autoFix && (
+                            <button onClick={simulateErrorAndFix} disabled={isGenerating} className="px-2 py-1 rounded bg-amber-100 text-amber-800 text-[10px] uppercase font-bold flex items-center gap-1 hover:bg-amber-200 disabled:opacity-50">
+                              <Wrench className="h-3 w-3" /> Simulate Error
+                            </button>
+                          )}
+                          {activeFeatures.checkpoints && codeHistory.length > 0 && (
+                            <button onClick={handleRevertCode} className="px-2 py-1 rounded bg-sky-100 text-sky-800 text-[10px] uppercase font-bold flex items-center gap-1 hover:bg-sky-200">
+                              <RotateCcw className="h-3 w-3" /> Revert
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => setExpandedPanel("code")} 
+                            className="p-1 hover:bg-slate-200 rounded text-slate-500 transition-colors"
+                            title="Expand Editor"
+                          >
+                            <Maximize2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex-1 w-full bg-white relative">
+                        <Editor 
+                          height="100%" 
+                          language={activeFile?.language || "javascript"} 
+                          theme="light" 
+                          value={activeFile?.content || ""} 
+                          onChange={(value: any) => {
+                            setFiles(prev => prev.map(f => 
+                              f.name === activeFileName ? { ...f, content: value || "" } : f
+                            ));
+                          }} 
+                          options={{ minimap: { enabled: false }, fontSize: 13, lineNumbers: "on", roundedSelection: true, wordWrap: "on" }} 
+                        />
+                      </div>
+                    </div>
+
+                    {/* LIVE SANDBOX PREVIEW */}
+                    <div className="flex-1 p-4 flex flex-col bg-slate-50/50 min-w-0">
+                      <div className="text-xs font-semibold text-slate-500 tracking-wider uppercase mb-2 flex items-center justify-between shrink-0">
+                        <span className="flex items-center gap-1.5"><LayoutTemplate className="h-4 w-4 text-indigo-500" /> Live Sandbox</span>
+                        <button 
+                          onClick={() => setExpandedPanel("preview")} 
+                          className="p-1 hover:bg-slate-200 rounded text-slate-500 transition-colors"
+                          title="Expand Preview"
+                        >
+                          <Maximize2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <div className="flex-1 w-full rounded-xl border border-slate-200 overflow-hidden shadow-sm bg-white relative">
+                        <iframe
+                          title="VibeCoder Live Preview"
+                          srcDoc={bundledPreview()}
+                          sandbox="allow-scripts allow-forms allow-popups allow-modals"
+                          className="absolute inset-0 w-full h-full border-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* BOTTOM HALF: Chat Interface */}
+                  <div className="h-[40%] flex flex-col bg-white overflow-hidden shrink-0">
+                    <div className="px-4 py-2 border-b border-slate-100 bg-slate-50 flex items-center justify-between text-xs font-semibold text-slate-600 shrink-0">
+                      <span className="flex items-center gap-1.5"><Bot className="h-4 w-4 text-indigo-600" /> AI Assistant Console</span>
+                      <div className="flex items-center gap-3">
+                        {activeFeatures.liveTimer && isGenerating && (
+                          <span className="text-emerald-600 font-mono flex items-center gap-1 animate-pulse"><Play className="h-3 w-3" fill="currentColor"/> {formatTime(buildSeconds)}</span>
+                        )}
+                        <button 
+                          onClick={() => setExpandedPanel("chat")} 
+                          className="p-1 hover:bg-slate-200 rounded text-slate-500 transition-colors"
+                          title="Expand Chat"
+                        >
+                          <Maximize2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                      {messages.map((msg) => (
+                        <div key={msg.id} className={`flex gap-3 max-w-[85%] animate-in fade-in slide-in-from-bottom-2 duration-150 ${msg.role === "user" ? "ml-auto flex-row-reverse" : "mr-auto"}`}>
+                          <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${msg.role === "user" ? "bg-slate-900 text-white" : "bg-indigo-600 text-white"}`}>
+                            {msg.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                          </div>
+                          <div className={`rounded-xl px-4 py-3 text-sm leading-relaxed shadow-sm ${msg.role === "user" ? "bg-slate-900 text-white font-medium" : "bg-white border border-slate-200 text-slate-800"}`}>
+                            <p className="whitespace-pre-wrap">{msg.content}</p>
+                            <span className={`block text-[10px] mt-1.5 text-right opacity-60`}>{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        </div>
+                      ))}
+                      
+                      {isGenerating && (
+                        <div className="flex gap-3 max-w-[85%] mr-auto items-center animate-pulse">
+                          <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0"><RefreshCw className="h-4 w-4 text-indigo-600 animate-spin" /></div>
+                          <div className="bg-white border border-slate-200 text-slate-400 rounded-xl px-4 py-2 text-xs font-medium italic shadow-sm">AI is writing code...</div>
+                        </div>
+                      )}
+                      <div ref={chatEndRef} />
+                    </div>
+
+                    <form onSubmit={handleFormSubmit} className="p-3 border-t border-slate-200 bg-slate-50 flex gap-2 shrink-0">
+                      <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={savedProviders.length === 0 ? "⚠️ Add an API key using the config button above to chat..." : "Ask AI to edit the code above..."} disabled={isGenerating || savedProviders.length === 0} className="flex-1 h-11 px-4 rounded-lg border border-slate-200 bg-white shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 placeholder:text-slate-400 disabled:opacity-50" />
+                      <button type="submit" disabled={!chatInput.trim() || isGenerating || savedProviders.length === 0} className="h-11 w-11 shrink-0 inline-flex items-center justify-center rounded-lg bg-slate-900 text-white transition-colors hover:bg-slate-800 shadow-sm disabled:opacity-40"><Send className="h-4 w-4" /></button>
+                    </form>
+                  </div>
+                </>
+              )}
+
+              {expandedPanel === "code" && (
+                <div className="flex-1 flex flex-col min-w-0 bg-slate-50 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between bg-slate-100 border-b border-slate-200 px-2 pt-2 shrink-0">
                     <div className="flex gap-1 overflow-x-auto custom-scrollbar">
                       {files.map((file) => (
@@ -987,6 +1145,13 @@ export default function Dashboard() {
                           <RotateCcw className="h-3 w-3" /> Revert
                         </button>
                       )}
+                      <button 
+                        onClick={() => setExpandedPanel(null)} 
+                        className="p-1 hover:bg-slate-200 rounded text-slate-500 transition-colors"
+                        title="Collapse Panel"
+                      >
+                        <Minimize2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </div>
                   <div className="flex-1 w-full bg-white relative">
@@ -1004,11 +1169,19 @@ export default function Dashboard() {
                     />
                   </div>
                 </div>
+              )}
 
-                {/* LIVE SANDBOX PREVIEW */}
-                <div className="flex-1 p-4 flex flex-col bg-slate-50/50 min-w-0">
-                  <div className="text-xs font-semibold text-slate-500 tracking-wider uppercase mb-2 flex items-center gap-1.5 shrink-0">
-                    <LayoutTemplate className="h-4 w-4 text-indigo-500" /> Live Sandbox
+              {expandedPanel === "preview" && (
+                <div className="flex-1 p-4 flex flex-col bg-slate-50/50 min-w-0 animate-in fade-in duration-200">
+                  <div className="text-xs font-semibold text-slate-500 tracking-wider uppercase mb-2 flex items-center justify-between shrink-0">
+                    <span className="flex items-center gap-1.5"><LayoutTemplate className="h-4 w-4 text-indigo-500" /> Live Sandbox (Expanded)</span>
+                    <button 
+                      onClick={() => setExpandedPanel(null)} 
+                      className="p-1 hover:bg-slate-200 rounded text-slate-500 transition-colors"
+                      title="Collapse Panel"
+                    >
+                      <Minimize2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                   <div className="flex-1 w-full rounded-xl border border-slate-200 overflow-hidden shadow-sm bg-white relative">
                     <iframe
@@ -1019,44 +1192,54 @@ export default function Dashboard() {
                     />
                   </div>
                 </div>
-              </div>
+              )}
 
-              {/* BOTTOM HALF: Chat Interface */}
-              <div className="h-[40%] flex flex-col bg-white overflow-hidden shrink-0">
-                <div className="px-4 py-2 border-b border-slate-100 bg-slate-50 flex items-center justify-between text-xs font-semibold text-slate-600 shrink-0">
-                  <span className="flex items-center gap-1.5"><Bot className="h-4 w-4 text-indigo-600" /> AI Assistant Console</span>
-                  {activeFeatures.liveTimer && isGenerating && (
-                    <span className="text-emerald-600 font-mono flex items-center gap-1 animate-pulse"><Play className="h-3 w-3" fill="currentColor"/> {formatTime(buildSeconds)}</span>
-                  )}
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                  {messages.map((msg) => (
-                    <div key={msg.id} className={`flex gap-3 max-w-[85%] animate-in fade-in slide-in-from-bottom-2 duration-150 ${msg.role === "user" ? "ml-auto flex-row-reverse" : "mr-auto"}`}>
-                      <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${msg.role === "user" ? "bg-slate-900 text-white" : "bg-indigo-600 text-white"}`}>
-                        {msg.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-                      </div>
-                      <div className={`rounded-xl px-4 py-3 text-sm leading-relaxed shadow-sm ${msg.role === "user" ? "bg-slate-900 text-white font-medium" : "bg-white border border-slate-200 text-slate-800"}`}>
-                        <p className="whitespace-pre-wrap">{msg.content}</p>
-                        <span className={`block text-[10px] mt-1.5 text-right opacity-60`}>{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                      </div>
+              {expandedPanel === "chat" && (
+                <div className="flex-1 flex flex-col bg-white overflow-hidden animate-in fade-in duration-200">
+                  <div className="px-4 py-2 border-b border-slate-100 bg-slate-50 flex items-center justify-between text-xs font-semibold text-slate-600 shrink-0">
+                    <span className="flex items-center gap-1.5"><Bot className="h-4 w-4 text-indigo-600" /> AI Assistant Console (Expanded)</span>
+                    <div className="flex items-center gap-3">
+                      {activeFeatures.liveTimer && isGenerating && (
+                        <span className="text-emerald-600 font-mono flex items-center gap-1 animate-pulse"><Play className="h-3 w-3" fill="currentColor"/> {formatTime(buildSeconds)}</span>
+                      )}
+                      <button 
+                        onClick={() => setExpandedPanel(null)} 
+                        className="p-1 hover:bg-slate-200 rounded text-slate-500 transition-colors"
+                        title="Collapse Panel"
+                      >
+                        <Minimize2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
-                  ))}
-                  
-                  {isGenerating && (
-                    <div className="flex gap-3 max-w-[85%] mr-auto items-center animate-pulse">
-                      <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0"><RefreshCw className="h-4 w-4 text-indigo-600 animate-spin" /></div>
-                      <div className="bg-white border border-slate-200 text-slate-400 rounded-xl px-4 py-2 text-xs font-medium italic shadow-sm">AI is writing code...</div>
-                    </div>
-                  )}
-                  <div ref={chatEndRef} />
-                </div>
+                  </div>
 
-                <form onSubmit={handleFormSubmit} className="p-3 border-t border-slate-200 bg-slate-50 flex gap-2 shrink-0">
-                  <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={savedProviders.length === 0 ? "⚠️ Add an API key using the config button above to chat..." : "Ask AI to edit the code above..."} disabled={isGenerating || savedProviders.length === 0} className="flex-1 h-11 px-4 rounded-lg border border-slate-200 bg-white shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 placeholder:text-slate-400 disabled:opacity-50" />
-                  <button type="submit" disabled={!chatInput.trim() || isGenerating || savedProviders.length === 0} className="h-11 w-11 shrink-0 inline-flex items-center justify-center rounded-lg bg-slate-900 text-white transition-colors hover:bg-slate-800 shadow-sm disabled:opacity-40"><Send className="h-4 w-4" /></button>
-                </form>
-              </div>
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {messages.map((msg) => (
+                      <div key={msg.id} className={`flex gap-3 max-w-[85%] animate-in fade-in slide-in-from-bottom-2 duration-150 ${msg.role === "user" ? "ml-auto flex-row-reverse" : "mr-auto"}`}>
+                        <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${msg.role === "user" ? "bg-slate-900 text-white" : "bg-indigo-600 text-white"}`}>
+                          {msg.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                        </div>
+                        <div className={`rounded-xl px-4 py-3 text-sm leading-relaxed shadow-sm ${msg.role === "user" ? "bg-slate-900 text-white font-medium" : "bg-white border border-slate-200 text-slate-800"}`}>
+                          <p className="whitespace-pre-wrap">{msg.content}</p>
+                          <span className={`block text-[10px] mt-1.5 text-right opacity-60`}>{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {isGenerating && (
+                      <div className="flex gap-3 max-w-[85%] mr-auto items-center animate-pulse">
+                        <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0"><RefreshCw className="h-4 w-4 text-indigo-600 animate-spin" /></div>
+                        <div className="bg-white border border-slate-200 text-slate-400 rounded-xl px-4 py-2 text-xs font-medium italic shadow-sm">AI is writing code...</div>
+                      </div>
+                    )}
+                    <div ref={chatEndRef} />
+                  </div>
+
+                  <form onSubmit={handleFormSubmit} className="p-3 border-t border-slate-200 bg-slate-50 flex gap-2 shrink-0">
+                    <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={savedProviders.length === 0 ? "⚠️ Add an API key using the config button above to chat..." : "Ask AI to edit the code above..."} disabled={isGenerating || savedProviders.length === 0} className="flex-1 h-11 px-4 rounded-lg border border-slate-200 bg-white shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 placeholder:text-slate-400 disabled:opacity-50" />
+                    <button type="submit" disabled={!chatInput.trim() || isGenerating || savedProviders.length === 0} className="h-11 w-11 shrink-0 inline-flex items-center justify-center rounded-lg bg-slate-900 text-white transition-colors hover:bg-slate-800 shadow-sm disabled:opacity-40"><Send className="h-4 w-4" /></button>
+                  </form>
+                </div>
+              )}
             </div>
           </main>
         </div>
