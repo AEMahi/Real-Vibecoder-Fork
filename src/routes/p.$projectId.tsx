@@ -10,25 +10,7 @@ import {
   Send, Bot, User, Sparkles, Plus, ListTodo, Timer, Wrench, RotateCcw, Play, Home, ArrowRight, LayoutTemplate, Github, Maximize2, Minimize2
 } from "lucide-react";
 
-// --- PREVIEW ENVIRONMENT SAFE FALLBACK MOCKS ---
-// These allow the code to compile instantly in the online preview browser.
-// They can remain here as safe fallbacks when the live compiler runs.
-const createFileRoute = (path: string) => (config: any) => {
-  return {
-    useParams: () => ({ projectId: "local-dev-workspace" })
-  };
-};
 
-const Editor = ({ value, onChange, language }: any) => (
-  <textarea 
-    value={value} 
-    onChange={(e) => onChange?.(e.target.value)} 
-    className="w-full h-full p-4 font-mono text-[13px] leading-relaxed bg-white text-slate-800 outline-none resize-none border-0"
-    spellCheck={false}
-    placeholder={`// Editor empty. Language: ${language}`}
-  />
-);
-// ----------------------------------------------
 
 export const Route = createFileRoute("/p/$projectId")({
   component: Dashboard,
