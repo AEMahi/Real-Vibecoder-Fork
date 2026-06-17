@@ -495,8 +495,11 @@ var handleServerAction = async ({ request, context, serverFnId }) => {
   })();
 };
 function isNotFoundResponse(error) {
-  const { headers, ...rest } = error;
-  return new Response(JSON.stringify(rest), {
+  const { headers } = error;
+  const safeBody = {
+    message: typeof error?.message === "string" ? error.message : "Not Found"
+  };
+  return new Response(JSON.stringify(safeBody), {
     status: 404,
     headers: {
       "Content-Type": "application/json",
