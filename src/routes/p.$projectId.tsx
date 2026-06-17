@@ -303,29 +303,33 @@ export default function Dashboard() {
     setNotification({ type: "success", message: "Project deleted successfully." });
   };
 
-  // ✅ HANDLER: Fully resets workspace and navigates to the new UUID
+  // ✅ NEW HANDLER: Resets workspace, routes text inputs, checks for API Keys
   const handleNewProject = () => {
     const newId = crypto.randomUUID();
+    const rawPrompt = chatInput.trim();
     
-    // 1. Reset state so it's a completely clean slate
-    setFiles([
+    // 1. Reset states so it's a completely clean slate
+    const cleanFiles = [
       { name: "index.html", language: "html", content: `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>VibeCoder Sandbox</title>\n</head>\n<body>\n  <div class="card">\n    <h1>Hello, VibeCoder! ✨</h1>\n    <p>I am your dynamic multi-file live execution sandbox.</p>\n  </div>\n</body>\n</html>` },
       { name: "styles.css", language: "css", content: `body {\n  font-family: system-ui, -apple-system, sans-serif;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  height: 100vh;\n  margin: 0;\n  background: linear-gradient(135deg, #e0e7ff 0%, #f0fdf4 100%);\n  color: #1e293b;\n}\n.card {\n  background: white;\n  padding: 2rem 3rem;\n  border-radius: 1rem;\n  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);\n  text-align: center;\n}\nh1 { margin: 0 0 0.5rem 0; color: #4f46e5; }\np { margin: 0; color: #64748b; }` },
       { name: "script.js", language: "javascript", content: `console.log("Sandbox initialized!");` }
-    ]);
-    setActiveFileName("index.html");
-    setMessages([{
+    ];
+
+    const cleanMessages: ChatMessage[] = [{
       id: "welcome",
       role: "assistant",
       content: "Hello! I am connected to your Multi-AI Sandbox environment. Let's start building! Describe an app you'd like to create.",
       timestamp: new Date()
-    }]);
+    }];
+
+    setFiles(cleanFiles);
+    setActiveFileName("index.html");
     setCodeHistory([]);
     setBuildSeconds(0);
     setSystemPrompt("");
     setExpandedPanel(null);
 
-    // 2. Navigate to the new URL to enforce ID swap
+    // 2. Navigate to the new URL
     navigate({ 
       to: "/p/$projectId", 
       params: { projectId: newId } 
@@ -333,6 +337,25 @@ export default function Dashboard() {
 
     // 3. Update the view to the chatbox
     setCurrentPage("chatbox");
+
+    // 4. Handle auto-sending the prompt if keys exist
+    if (rawPrompt) {
+      if (savedProviders.length > 0) {
+        // Has a key + prompt: Clear input and send to AI immediately using clean state overrides
+        setChatInput("");
+        const readableName = rawPrompt.length > 32 ? rawPrompt.substring(0, 32) + "..." : rawPrompt;
+        setRecentProjects(prev => [{ id: newId, name: readableName, date: new Date(), fileCount: 3 }, ...prev]);
+        
+        sendToAI(rawPrompt, cleanMessages, cleanFiles);
+      } else {
+        // No key: pre-load the messages but keep the prompt in the input field!
+        setMessages(cleanMessages);
+      }
+    } else {
+      // Nothing typed
+      setMessages(cleanMessages);
+      setChatInput("");
+    }
   };
 
   // Dynamic Client-side GitHub Export Handler
@@ -580,7 +603,6 @@ export default function Dashboard() {
     if (!chatInput.trim() || isGenerating) return;
     const rawPrompt = chatInput.trim();
     
-    // ✅ FIX: No longer restricted to recentProjects.length === 0
     if (messages.length === 1) {
       const readableName = rawPrompt.length > 32 ? rawPrompt.substring(0, 32) + "..." : rawPrompt;
       setRecentProjects(prev => {
@@ -633,18 +655,22 @@ export default function Dashboard() {
     return foundAny ? updatedFiles : null;
   };
 
-  const sendToAI = async (messageText: string) => {
+  // ✅ FIX: Allow overriding active state locally so auto-send uses the freshly reset project state
+  const sendToAI = async (messageText: string, overrideMessages?: ChatMessage[], overrideFiles?: FileObj[]) => {
+    const activeMessages = overrideMessages || messages;
+    const activeFiles = overrideFiles || files;
+
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(), role: "user", content: messageText, timestamp: new Date()
     };
     
-    const updatedMessages = [...messages, userMsg];
+    const updatedMessages = [...activeMessages, userMsg];
     setMessages(updatedMessages);
     setIsGenerating(true);
 
     if (activeFeatures.checkpoints) {
       // Snapshot the current files array
-      setCodeHistory(prev => [...prev, JSON.parse(JSON.stringify(files))]);
+      setCodeHistory(prev => [...prev, JSON.parse(JSON.stringify(activeFiles))]);
     }
 
     const blockLabel = String.fromCharCode(96, 96, 96);
@@ -656,7 +682,7 @@ export default function Dashboard() {
       : basePrompt;
 
     const safeHistory: { role: string, content: string }[] = [];
-    for (const m of messages) {
+    for (const m of activeMessages) {
       if (m.id === "welcome" || m.content.startsWith("⚠️") || m.content.startsWith("🔄") || m.content.startsWith("❌")) continue;
       
       if (safeHistory.length > 0 && safeHistory[safeHistory.length - 1].role === m.role) {
@@ -695,7 +721,7 @@ export default function Dashboard() {
     
     // Provide AI context of ALL files dynamically
     const tickMarks = String.fromCharCode(96, 96, 96);
-    const currentCodeContext = files.map(f => `File: ${f.name}\n${tickMarks}${f.language}\n${f.content}\n${tickMarks}`).join('\n\n');
+    const currentCodeContext = activeFiles.map(f => `File: ${f.name}\n${tickMarks}${f.language}\n${f.content}\n${tickMarks}`).join('\n\n');
 
     for (let i = 0; i < providersToTry.length; i++) {
       const currentProvider = providersToTry[i];
@@ -785,7 +811,7 @@ export default function Dashboard() {
         }]);
 
         // Extract updated blocks dynamically
-        const newFiles = extractFiles(aiResponseText, files);
+        const newFiles = extractFiles(aiResponseText, activeFiles);
         if (newFiles) {
           setFiles(newFiles);
           if (i > 0) {
