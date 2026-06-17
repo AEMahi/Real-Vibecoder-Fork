@@ -32,6 +32,34 @@ type AIModel =
 
 type KeyProvider = "gemini" | "openai" | "anthropic" | "local" | "mistral" | "groq" | "deepseek" | "openrouter" | "custom";
 
+// Maps each selectable model to the provider whose saved API key it requires
+const MODEL_PROVIDER_MAP: Record<AIModel, KeyProvider> = {
+  "gemini-2.5-flash": "gemini",
+  "gemini-2.5-pro": "gemini",
+  "gpt-4o": "openai",
+  "claude-3.7-sonnet": "anthropic",
+  "local-llama": "local",
+  "mistral": "mistral",
+  "groq": "groq",
+  "deepseek": "deepseek",
+  "openrouter": "openrouter",
+  "custom": "custom",
+};
+
+// Display metadata for each model, grouped the same way the dropdown shows them
+const MODEL_OPTIONS: { value: AIModel; label: string; group: string }[] = [
+  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash", group: "Google Gemini" },
+  { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro", group: "Google Gemini" },
+  { value: "gpt-4o", label: "ChatGPT-4o", group: "OpenAI" },
+  { value: "claude-3.7-sonnet", label: "Claude 3.7 Sonnet", group: "Anthropic" },
+  { value: "local-llama", label: "Local Llama", group: "Other Providers" },
+  { value: "mistral", label: "Mistral", group: "Other Providers" },
+  { value: "groq", label: "Groq", group: "Other Providers" },
+  { value: "deepseek", label: "DeepSeek", group: "Other Providers" },
+  { value: "openrouter", label: "OpenRouter", group: "Other Providers" },
+  { value: "custom", label: "Custom API", group: "Other Providers" },
+];
+
 interface SavedCredential {
   id: string;
   provider: KeyProvider;
@@ -256,6 +284,18 @@ export default function Dashboard() {
     }
     return () => clearInterval(interval);
   }, [currentPage, isGenerating, activeFeatures.liveTimer]);
+
+  useEffect(() => {
+    const currentProviderHasKey = savedProviders.some((p) => p.provider === MODEL_PROVIDER_MAP[selectedModel]);
+    if (!currentProviderHasKey) {
+      const firstAvailable = MODEL_OPTIONS.find((opt) =>
+        savedProviders.some((p) => p.provider === MODEL_PROVIDER_MAP[opt.value])
+      );
+      if (firstAvailable) {
+        setSelectedModel(firstAvailable.value);
+      }
+    }
+  }, [savedProviders]);
 
   const handleDeleteProject = (projectId: string) => {
     setRecentProjects((prev) => prev.filter((p) => p.id !== projectId));
@@ -897,25 +937,29 @@ export default function Dashboard() {
                 <Key className="h-3.5 w-3.5" /><span>API Keys</span>
               </button>
 
-              <select value={selectedModel} onChange={(e) => handleModelChange(e.target.value as AIModel)} className="h-9 rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs shadow-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer">
-                  <optgroup label="Google Gemini">
-                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                  </optgroup>
-                  <optgroup label="OpenAI">
-                    <option value="gpt-4o">ChatGPT-4o</option>
-                  </optgroup>
-                  <optgroup label="Anthropic">
-                    <option value="claude-3.7-sonnet">Claude 3.7 Sonnet</option>
-                  </optgroup>
-                  <optgroup label="Other Providers">
-                    <option value="local-llama">Local Llama</option>
-                    <option value="mistral">Mistral</option>
-                    <option value="groq">Groq</option>
-                    <option value="deepseek">DeepSeek</option>
-                    <option value="openrouter">OpenRouter</option>
-                    <option value="custom">Custom API</option>
-                  </optgroup>
+              <select
+                value={selectedModel}
+                onChange={(e) => handleModelChange(e.target.value as AIModel)}
+                disabled={savedProviders.length === 0}
+                className="h-9 rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs shadow-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savedProviders.length === 0 ? (
+                  <option value="">No API keys configured</option>
+                ) : (
+                  Array.from(new Set(
+                    MODEL_OPTIONS
+                      .filter((opt) => savedProviders.some((p) => p.provider === MODEL_PROVIDER_MAP[opt.value]))
+                      .map((opt) => opt.group)
+                  )).map((group) => (
+                    <optgroup key={group} label={group}>
+                      {MODEL_OPTIONS
+                        .filter((opt) => opt.group === group && savedProviders.some((p) => p.provider === MODEL_PROVIDER_MAP[opt.value]))
+                        .map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                    </optgroup>
+                  ))
+                )}
               </select>
             </div>
           </header>
