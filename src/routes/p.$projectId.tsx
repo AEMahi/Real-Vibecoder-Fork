@@ -323,7 +323,6 @@ export default function Dashboard() {
     setCodeHistory([]);
     setBuildSeconds(0);
     setSystemPrompt("");
-    setChatInput("");
     setExpandedPanel(null);
 
     // 2. Navigate to the new URL to enforce ID swap
@@ -872,6 +871,14 @@ export default function Dashboard() {
 
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-12 overflow-hidden focus-within:border-indigo-300 focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all">
               <textarea 
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleNewProject();
+                  }
+                }}
                 placeholder="Describe an app to build... e.g. a pomodoro timer with dark mode" 
                 className="w-full resize-none p-5 pb-2 text-slate-700 outline-none text-sm bg-transparent"
                 rows={2}
