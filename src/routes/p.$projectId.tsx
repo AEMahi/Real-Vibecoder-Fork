@@ -1,7 +1,7 @@
 // ==========================================
 // LOCAL ENVIRONMENT NOTICE:
 // For your local project on your computer, please UNCOMMENT the two lines below:
- import { createFileRoute } from "@tanstack/react-router";
+ import { createFileRoute, useNavigate } from "@tanstack/react-router";
  import Editor from "@monaco-editor/react";
 // ==========================================
 import { useState, useEffect, useRef } from "react";
@@ -166,6 +166,7 @@ const getProviderConfig = (provider: KeyProvider, selectedModel: string) => {
 export default function Dashboard() {
   // Extract Route Parameter dynamically using TanStack Route params
   const { projectId } = Route.useParams();
+  const navigate = useNavigate();
 
   const [currentPage, setCurrentPage] = useState<PageView>("home");
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
@@ -300,6 +301,39 @@ export default function Dashboard() {
   const handleDeleteProject = (projectId: string) => {
     setRecentProjects((prev) => prev.filter((p) => p.id !== projectId));
     setNotification({ type: "success", message: "Project deleted successfully." });
+  };
+
+  // ✅ NEW HANDLER: Fully resets workspace and navigates to the new UUID
+  const handleNewProject = () => {
+    const newId = crypto.randomUUID();
+    
+    // 1. Reset state so it's a completely clean slate
+    setFiles([
+      { name: "index.html", language: "html", content: `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>VibeCoder Sandbox</title>\n</head>\n<body>\n  <div class="card">\n    <h1>Hello, VibeCoder! ✨</h1>\n    <p>I am your dynamic multi-file live execution sandbox.</p>\n  </div>\n</body>\n</html>` },
+      { name: "styles.css", language: "css", content: `body {\n  font-family: system-ui, -apple-system, sans-serif;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  height: 100vh;\n  margin: 0;\n  background: linear-gradient(135deg, #e0e7ff 0%, #f0fdf4 100%);\n  color: #1e293b;\n}\n.card {\n  background: white;\n  padding: 2rem 3rem;\n  border-radius: 1rem;\n  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);\n  text-align: center;\n}\nh1 { margin: 0 0 0.5rem 0; color: #4f46e5; }\np { margin: 0; color: #64748b; }` },
+      { name: "script.js", language: "javascript", content: `console.log("Sandbox initialized!");` }
+    ]);
+    setActiveFileName("index.html");
+    setMessages([{
+      id: "welcome",
+      role: "assistant",
+      content: "Hello! I am connected to your Multi-AI Sandbox environment. Let's start building! Describe an app you'd like to create.",
+      timestamp: new Date()
+    }]);
+    setCodeHistory([]);
+    setBuildSeconds(0);
+    setSystemPrompt("");
+    setChatInput("");
+    setExpandedPanel(null);
+
+    // 2. Navigate to the new URL to enforce ID swap
+    navigate({ 
+      to: "/p/$projectId", 
+      params: { projectId: newId } 
+    });
+
+    // 3. Update the view to the chatbox
+    setCurrentPage("chatbox");
   };
 
   // Dynamic Client-side GitHub Export Handler
@@ -839,7 +873,7 @@ export default function Dashboard() {
               <div className="flex justify-between items-center px-5 py-3 bg-white">
                 <span className="text-xs text-slate-400 font-medium">Ready to build</span>
                 <button 
-                  onClick={() => setCurrentPage("chatbox")} 
+                  onClick={handleNewProject} 
                   className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-800 flex items-center gap-2 shadow-sm transition-transform hover:-translate-y-0.5"
                 >
                   <Plus className="h-4 w-4" /> New project
