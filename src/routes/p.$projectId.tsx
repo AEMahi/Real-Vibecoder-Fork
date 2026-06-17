@@ -897,7 +897,6 @@ export default function Dashboard() {
               ) : (
                 <div className="space-y-3">
                   {recentProjects.map((project) => (
-                    {/* ✅ FIX: Now clicking the project navigates your URL to it! */}
                     <div 
                       key={project.id} 
                       onClick={() => {
