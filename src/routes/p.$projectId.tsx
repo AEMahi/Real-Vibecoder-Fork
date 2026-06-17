@@ -1,7 +1,7 @@
 // ==========================================
 // LOCAL ENVIRONMENT NOTICE:
 // For your local project on your computer, please UNCOMMENT the two lines below:
- import { createFileRoute } from "@tanstack/react-router";
+ import { createFileRoute, useNavigate } from "@tanstack/react-router";
  import Editor from "@monaco-editor/react";
 // ==========================================
 import { useState, useEffect, useRef } from "react";
@@ -166,6 +166,7 @@ const getProviderConfig = (provider: KeyProvider, selectedModel: string) => {
 export default function Dashboard() {
   // Extract Route Parameter dynamically using TanStack Route params
   const { projectId } = Route.useParams();
+  const navigate = useNavigate();
 
   const [currentPage, setCurrentPage] = useState<PageView>("home");
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
@@ -788,6 +789,14 @@ export default function Dashboard() {
     return `${m}:${s}`;
   };
 
+  const handleNewProject = () => {
+    const newId = crypto.randomUUID();
+    navigate({ 
+      to: "/p/$projectId", 
+      params: { projectId: newId } 
+    });
+  };
+
   return (
     <>
       {notification && (
@@ -839,7 +848,7 @@ export default function Dashboard() {
               <div className="flex justify-between items-center px-5 py-3 bg-white">
                 <span className="text-xs text-slate-400 font-medium">Ready to build</span>
                 <button 
-                  onClick={() => setCurrentPage("chatbox")} 
+                  onClick={handleNewProject} 
                   className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-800 flex items-center gap-2 shadow-sm transition-transform hover:-translate-y-0.5"
                 >
                   <Plus className="h-4 w-4" /> New project
