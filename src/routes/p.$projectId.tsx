@@ -303,7 +303,7 @@ export default function Dashboard() {
     setNotification({ type: "success", message: "Project deleted successfully." });
   };
 
-  // ✅ NEW HANDLER: Fully resets workspace and navigates to the new UUID
+  // ✅ HANDLER: Fully resets workspace and navigates to the new UUID
   const handleNewProject = () => {
     const newId = crypto.randomUUID();
     
@@ -581,12 +581,18 @@ export default function Dashboard() {
     if (!chatInput.trim() || isGenerating) return;
     const rawPrompt = chatInput.trim();
     
-    if (messages.length === 1 && recentProjects.length === 0) {
+    // ✅ FIX: No longer restricted to recentProjects.length === 0
+    if (messages.length === 1) {
       const readableName = rawPrompt.length > 32 ? rawPrompt.substring(0, 32) + "..." : rawPrompt;
-      setRecentProjects(prev => [
-        { id: crypto.randomUUID(), name: readableName, date: new Date(), fileCount: files.length },
-        ...prev
-      ]);
+      setRecentProjects(prev => {
+        // Prevent duplicate saves of the same project ID
+        if (prev.some(p => p.id === projectId)) return prev;
+        
+        return [
+          { id: projectId, name: readableName, date: new Date(), fileCount: files.length },
+          ...prev
+        ];
+      });
     }
 
     setChatInput("");
@@ -891,7 +897,15 @@ export default function Dashboard() {
               ) : (
                 <div className="space-y-3">
                   {recentProjects.map((project) => (
-                    <div key={project.id} onClick={() => setCurrentPage("chatbox")} className="bg-white rounded-xl border border-slate-200 p-5 flex justify-between items-center shadow-sm cursor-pointer hover:border-indigo-300 hover:shadow-md transition-all group">
+                    {/* ✅ FIX: Now clicking the project navigates your URL to it! */}
+                    <div 
+                      key={project.id} 
+                      onClick={() => {
+                        navigate({ to: "/p/$projectId", params: { projectId: project.id } });
+                        setCurrentPage("chatbox");
+                      }} 
+                      className="bg-white rounded-xl border border-slate-200 p-5 flex justify-between items-center shadow-sm cursor-pointer hover:border-indigo-300 hover:shadow-md transition-all group"
+                    >
                       <div>
                         <h4 className="font-semibold text-slate-900">{project.name}</h4>
                         <p className="text-xs text-slate-500 mt-1.5">{project.date.toLocaleDateString()} · {project.fileCount} file(s)</p>
