@@ -1,7 +1,7 @@
 // ==========================================
 // LOCAL ENVIRONMENT NOTICE:
 // For your local project on your computer, please UNCOMMENT the two lines below:
- import { createFileRoute } from "@tanstack/react-router";
+ import { createFileRoute, useNavigate } from "@tanstack/react-router";
  import Editor from "@monaco-editor/react";
 // ==========================================
 import { useState, useEffect, useRef } from "react";
@@ -9,6 +9,7 @@ import {
   Key, X, Trash2, CheckCircle2, AlertTriangle, RefreshCw, 
   Send, Bot, User, Sparkles, Plus, ListTodo, Timer, Wrench, RotateCcw, Play, Home, ArrowRight, LayoutTemplate, Github, Maximize2, Minimize2
 } from "lucide-react";
+import { filterPrompt } from "./promptFilter";
 
 
 
@@ -32,6 +33,7 @@ type AIModel =
 
 type KeyProvider = "gemini" | "openai" | "anthropic" | "local" | "mistral" | "groq" | "deepseek" | "openrouter" | "custom";
 
+// Maps each selectable model to the provider whose saved API key it requires
 const MODEL_PROVIDER_MAP: Record<AIModel, KeyProvider> = {
   "gemini-2.5-flash": "gemini",
   "gemini-2.5-pro": "gemini",
@@ -45,6 +47,7 @@ const MODEL_PROVIDER_MAP: Record<AIModel, KeyProvider> = {
   "custom": "custom",
 };
 
+// Display metadata for each model, grouped the same way the dropdown shows them
 const MODEL_OPTIONS: { value: AIModel; label: string; group: string }[] = [
   { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash", group: "Google Gemini" },
   { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro", group: "Google Gemini" },
@@ -84,12 +87,14 @@ interface Project {
   fileCount: number;
 }
 
+// Support for multiple dynamic files
 interface FileObj {
   name: string;
   language: string;
   content: string;
 }
 
+// 🌐 Dynamic Endpoint & Header Generator for Live Fallbacks
 const getProviderConfig = (provider: KeyProvider, selectedModel: string) => {
   switch (provider) {
     case "openai":
@@ -160,7 +165,9 @@ const getProviderConfig = (provider: KeyProvider, selectedModel: string) => {
 };
 
 export default function Dashboard() {
+  // Extract Route Parameter dynamically using TanStack Route params
   const { projectId } = Route.useParams();
+  const navigate = useNavigate();
 
   const [currentPage, setCurrentPage] = useState<PageView>("home");
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
@@ -171,7 +178,8 @@ export default function Dashboard() {
     checkpoints: false
   });
   const [selectedModel, setSelectedModel] = useState<AIModel>("gemini-2.5-flash");
-
+  
+  // 1. Files state handles dynamically created files
   const [files, setFiles] = useState<FileObj[]>([
     {
       name: "index.html",
@@ -217,24 +225,30 @@ export default function Dashboard() {
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Panel expansion states
   const [expandedPanel, setExpandedPanel] = useState<"code" | "preview" | "chat" | null>(null);
 
+  // GitHub Export States
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const [exportRepoName, setExportRepoName] = useState<string>("vibecoder-project");
   const [githubToken, setGithubToken] = useState<string>("");
   const [exportCommitMessage, setExportCommitMessage] = useState<string>("Code update by VibeCoder");
   const [isExporting, setIsExporting] = useState<boolean>(false);
 
+  // Bundles the dynamic files dynamically for the iframe
   const bundledPreview = () => {
+    // Find main HTML file
     const htmlFile = files.find(f => f.name.endsWith('.html') || f.language === 'html');
     let doc = htmlFile ? htmlFile.content : "<div style='padding: 20px; font-family: sans-serif;'>No HTML file found in workspace.</div>";
-
+    
+    // Concatenate all CSS files
     const cssFiles = files.filter(f => f.name.endsWith('.css') || f.language === 'css');
     const combinedCSS = cssFiles.map(f => `/* ${f.name} */\n${f.content}`).join('\n\n');
-
+    
+    // Concatenate all JS files
     const jsFiles = files.filter(f => ['javascript', 'js', 'ts', 'jsx', 'tsx'].includes(f.language) || f.name.endsWith('.js'));
     const combinedJS = jsFiles.map(f => `/* ${f.name} */\n${f.content}`).join('\n\n');
-
+    
     if (combinedCSS && doc.includes('</head>')) {
         doc = doc.replace('</head>', `<style>\n${combinedCSS}\n</style>\n</head>`);
     } else if (combinedCSS) {
@@ -246,7 +260,7 @@ export default function Dashboard() {
     } else if (combinedJS) {
         doc += `\n<script>\n${combinedJS}\n</script>`;
     }
-
+    
     return doc;
   };
 
@@ -290,6 +304,62 @@ export default function Dashboard() {
     setNotification({ type: "success", message: "Project deleted successfully." });
   };
 
+  // ✅ NEW HANDLER: Resets workspace, routes text inputs, checks for API Keys
+  const handleNewProject = () => {
+    const newId = crypto.randomUUID();
+    const rawPrompt = chatInput.trim();
+    
+    // 1. Reset states so it's a completely clean slate
+    const cleanFiles = [
+      { name: "index.html", language: "html", content: `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>VibeCoder Sandbox</title>\n</head>\n<body>\n  <div class="card">\n    <h1>Hello, VibeCoder! ✨</h1>\n    <p>I am your dynamic multi-file live execution sandbox.</p>\n  </div>\n</body>\n</html>` },
+      { name: "styles.css", language: "css", content: `body {\n  font-family: system-ui, -apple-system, sans-serif;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  height: 100vh;\n  margin: 0;\n  background: linear-gradient(135deg, #e0e7ff 0%, #f0fdf4 100%);\n  color: #1e293b;\n}\n.card {\n  background: white;\n  padding: 2rem 3rem;\n  border-radius: 1rem;\n  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);\n  text-align: center;\n}\nh1 { margin: 0 0 0.5rem 0; color: #4f46e5; }\np { margin: 0; color: #64748b; }` },
+      { name: "script.js", language: "javascript", content: `console.log("Sandbox initialized!");` }
+    ];
+
+    const cleanMessages: ChatMessage[] = [{
+      id: "welcome",
+      role: "assistant",
+      content: "Hello! I am connected to your Multi-AI Sandbox environment. Let's start building! Describe an app you'd like to create.",
+      timestamp: new Date()
+    }];
+
+    setFiles(cleanFiles);
+    setActiveFileName("index.html");
+    setCodeHistory([]);
+    setBuildSeconds(0);
+    setSystemPrompt("");
+    setExpandedPanel(null);
+
+    // 2. Navigate to the new URL
+    navigate({ 
+      to: "/p/$projectId", 
+      params: { projectId: newId } 
+    });
+
+    // 3. Update the view to the chatbox
+    setCurrentPage("chatbox");
+
+    // 4. Handle auto-sending the prompt if keys exist
+    if (rawPrompt) {
+      if (savedProviders.length > 0) {
+        // Has a key + prompt: Clear input and send to AI immediately using clean state overrides
+        setChatInput("");
+        const readableName = rawPrompt.length > 32 ? rawPrompt.substring(0, 32) + "..." : rawPrompt;
+        setRecentProjects(prev => [{ id: newId, name: readableName, date: new Date(), fileCount: 3 }, ...prev]);
+        
+        sendToAI(rawPrompt, cleanMessages, cleanFiles);
+      } else {
+        // No key: pre-load the messages but keep the prompt in the input field!
+        setMessages(cleanMessages);
+      }
+    } else {
+      // Nothing typed
+      setMessages(cleanMessages);
+      setChatInput("");
+    }
+  };
+
+  // Dynamic Client-side GitHub Export Handler
   const handleExportGitHub = async () => {
     setIsExportModalOpen(true);
   };
@@ -310,16 +380,19 @@ export default function Dashboard() {
     };
 
     try {
+      // 1. Get authenticated user
       const userRes = await fetch("https://api.github.com/user", { headers: ghHeaders });
       if (!userRes.ok) throw new Error("Invalid GitHub Access Token. Check that it has 'repo' scope.");
       const userData = await userRes.json();
       const owner = userData.login;
 
+      // 2. Check if repo exists; create it if not
       const repoCheckRes = await fetch(`https://api.github.com/repos/${owner}/${repoName}`, { headers: ghHeaders });
 
       let defaultBranch = "main";
 
       if (repoCheckRes.status === 404) {
+        // Repo doesn't exist — create it (auto_init seeds an initial commit so the branch exists)
         const createRepoRes = await fetch("https://api.github.com/user/repos", {
           method: "POST",
           headers: ghHeaders,
@@ -334,14 +407,17 @@ export default function Dashboard() {
           const err = await createRepoRes.json();
           throw new Error(`Failed to create repo: ${err.message || createRepoRes.status}`);
         }
+        // Give GitHub a moment to provision the initial commit
         await new Promise(resolve => setTimeout(resolve, 2500));
       } else if (repoCheckRes.ok) {
+        // Repo exists — read its actual default branch name (could be "master")
         const repoData = await repoCheckRes.json();
         defaultBranch = repoData.default_branch || "main";
       } else {
         throw new Error(`Could not access repo: HTTP ${repoCheckRes.status}. Check token permissions.`);
       }
 
+      // 3. Get the current HEAD of the default branch
       let baseTreeSha: string | null = null;
       let parentCommitSha: string | null = null;
 
@@ -355,7 +431,10 @@ export default function Dashboard() {
         parentCommitSha = branchData.commit.sha;
         baseTreeSha = branchData.commit.commit.tree.sha;
       }
+      // If branch doesn't exist yet (empty repo edge case), we proceed with nulls —
+      // GitHub will create the branch from the new commit.
 
+      // 4. Create blobs for each file
       const treeItems: { path: string; mode: string; type: string; sha: string }[] = [];
       for (const file of files) {
         const blobRes = await fetch(
@@ -376,6 +455,7 @@ export default function Dashboard() {
 
       if (treeItems.length === 0) throw new Error("No files to export.");
 
+      // 5. Create a new tree (on top of the existing one if repo had commits)
       const treeBody: Record<string, unknown> = { tree: treeItems };
       if (baseTreeSha) treeBody.base_tree = baseTreeSha;
 
@@ -389,6 +469,7 @@ export default function Dashboard() {
       }
       const treeData = await treeRes.json();
 
+      // 6. Create a commit pointing to the new tree
       const commitBody: Record<string, unknown> = {
         message: exportCommitMessage || "Code update by VibeCoder",
         tree: treeData.sha,
@@ -405,6 +486,7 @@ export default function Dashboard() {
       }
       const commitData = await commitRes.json();
 
+      // 7. Update (or create) the branch ref to point to the new commit
       const refPath = `refs/heads/${defaultBranch}`;
       const refUpdateRes = await fetch(
         `https://api.github.com/repos/${owner}/${repoName}/git/${refPath}`,
@@ -416,6 +498,7 @@ export default function Dashboard() {
       );
 
       if (refUpdateRes.status === 422 || !refUpdateRes.ok) {
+        // Ref may not exist yet (brand-new empty repo) — create it instead
         const refCreateRes = await fetch(
           `https://api.github.com/repos/${owner}/${repoName}/git/refs`,
           {
@@ -456,9 +539,9 @@ export default function Dashboard() {
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${secretKey}`);
         return res.status === 200;
       }
-
+      
       const config = getProviderConfig(provider, "default");
-      const testBody = config.format === "openai"
+      const testBody = config.format === "openai" 
         ? { model: config.model, messages: [{ role: "user", content: "ping" }], max_tokens: 5 }
         : { model: config.model, messages: [{ role: "user", content: "ping" }], max_tokens: 5 };
 
@@ -521,20 +604,10 @@ export default function Dashboard() {
     if (!chatInput.trim() || isGenerating) return;
     const rawPrompt = chatInput.trim();
 
-    if (messages.length === 1 && recentProjects.length === 0) {
-      const readableName = rawPrompt.length > 32 ? rawPrompt.substring(0, 32) + "..." : rawPrompt;
-      setRecentProjects(prev => [
-        { id: crypto.randomUUID(), name: readableName, date: new Date(), fileCount: files.length },
-        ...prev
-      ]);
-    }
-
-    setChatInput("");
-
-    // ── Prompt filter ──────────────────────────────────────────────────────
-    const { filterPrompt } = await import("./promptFilter");
+    // — Prompt filter ————————————————————————————————
     const filterResult = filterPrompt(rawPrompt);
     if (filterResult.blocked) {
+      setChatInput("");
       setMessages((prev) => [
         ...prev,
         {
@@ -546,17 +619,32 @@ export default function Dashboard() {
       ]);
       return;
     }
-    // Use the sanitized version if the filter cleaned anything up
     const safePrompt = filterResult.sanitized ?? rawPrompt;
-    // ── End prompt filter ──────────────────────────────────────────────────
+    // — End prompt filter ————————————————————————————————
+    
+    if (messages.length === 1) {
+      const readableName = safePrompt.length > 32 ? safePrompt.substring(0, 32) + "..." : safePrompt;
+      setRecentProjects(prev => {
+        // Prevent duplicate saves of the same project ID
+        if (prev.some(p => p.id === projectId)) return prev;
+        
+        return [
+          { id: projectId, name: readableName, date: new Date(), fileCount: files.length },
+          ...prev
+        ];
+      });
+    }
 
+    setChatInput("");
     sendToAI(safePrompt);
   };
 
+  // Robust dynamic file extraction (uses char code to prevent esbuild regex break)
   const extractFiles = (text: string, currentFiles: FileObj[]): FileObj[] | null => {
     const ticks = String.fromCharCode(96, 96, 96);
+    // Regex matching any code block and optionally reading the filename after a colon
     const blockRegex = new RegExp(ticks + '([a-z0-9]+)(?:[:|\\|]([^\\n]+))?\\n([\\s\\S]*?)' + ticks, 'gi');
-
+    
     let match;
     const updatedFiles = [...currentFiles];
     let foundAny = false;
@@ -567,6 +655,7 @@ export default function Dashboard() {
       let name = match[2] ? match[2].trim() : '';
       const content = match[3].trim();
 
+      // Guess a filename if the AI just gave us the language
       if (!name) {
         if (lang === 'html') name = 'index.html';
         else if (lang === 'css') name = 'styles.css';
@@ -585,31 +674,36 @@ export default function Dashboard() {
     return foundAny ? updatedFiles : null;
   };
 
-  const sendToAI = async (messageText: string) => {
+  // ✅ FIX: Allow overriding active state locally so auto-send uses the freshly reset project state
+  const sendToAI = async (messageText: string, overrideMessages?: ChatMessage[], overrideFiles?: FileObj[]) => {
+    const activeMessages = overrideMessages || messages;
+    const activeFiles = overrideFiles || files;
+
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(), role: "user", content: messageText, timestamp: new Date()
     };
-
-    const updatedMessages = [...messages, userMsg];
+    
+    const updatedMessages = [...activeMessages, userMsg];
     setMessages(updatedMessages);
     setIsGenerating(true);
 
     if (activeFeatures.checkpoints) {
-      setCodeHistory(prev => [...prev, JSON.parse(JSON.stringify(files))]);
+      // Snapshot the current files array
+      setCodeHistory(prev => [...prev, JSON.parse(JSON.stringify(activeFiles))]);
     }
 
     const blockLabel = String.fromCharCode(96, 96, 96);
     const basePrompt = systemPrompt.trim() ||
       `You are an expert full-stack developer assistant. CRITICAL: When writing or updating code, you MUST output your solution in separate markdown code blocks. You can create as many files as necessary. ALWAYS include the filename in the block header like this: ${blockLabel}html:index.html or ${blockLabel}css:styles.css or ${blockLabel}javascript:app.js. Output the raw elements, styles, and logic for each file separately so they can be parsed into a dynamic multi-file system.`;
-
-    const finalSystemPrompt = activeFeatures.planMode
+    
+    const finalSystemPrompt = activeFeatures.planMode 
       ? (systemPrompt.trim() || "You are an expert full-stack developer assistant.") + "\n\nCRITICAL INSTRUCTION: You are currently in PLAN MODE. You must ONLY output a numbered step-by-step plan outlining how to solve the request. DO NOT output any code blocks. Wait until the user disables Plan Mode before writing actual code."
       : basePrompt;
 
     const safeHistory: { role: string, content: string }[] = [];
-    for (const m of messages) {
+    for (const m of activeMessages) {
       if (m.id === "welcome" || m.content.startsWith("⚠️") || m.content.startsWith("🔄") || m.content.startsWith("❌")) continue;
-
+      
       if (safeHistory.length > 0 && safeHistory[safeHistory.length - 1].role === m.role) {
          safeHistory[safeHistory.length - 1].content += `\n\n[Follow-up]: ${m.content}`;
       } else {
@@ -617,9 +711,9 @@ export default function Dashboard() {
       }
     }
 
-    const primaryProvider = selectedModel.startsWith("gemini") ? "gemini" :
-                            selectedModel.startsWith("gpt") ? "openai" :
-                            selectedModel.startsWith("claude") ? "anthropic" :
+    const primaryProvider = selectedModel.startsWith("gemini") ? "gemini" : 
+                            selectedModel.startsWith("gpt") ? "openai" : 
+                            selectedModel.startsWith("claude") ? "anthropic" : 
                             selectedModel === "local-llama" ? "local" :
                             (selectedModel as KeyProvider);
 
@@ -643,9 +737,10 @@ export default function Dashboard() {
     }
 
     let completedSuccessfully = false;
-
+    
+    // Provide AI context of ALL files dynamically
     const tickMarks = String.fromCharCode(96, 96, 96);
-    const currentCodeContext = files.map(f => `File: ${f.name}\n${tickMarks}${f.language}\n${f.content}\n${tickMarks}`).join('\n\n');
+    const currentCodeContext = activeFiles.map(f => `File: ${f.name}\n${tickMarks}${f.language}\n${f.content}\n${tickMarks}`).join('\n\n');
 
     for (let i = 0; i < providersToTry.length; i++) {
       const currentProvider = providersToTry[i];
@@ -671,7 +766,7 @@ export default function Dashboard() {
 
         if (currentProvider === "gemini") {
           const targetModelName = selectedModel.includes("pro") ? "gemini-2.5-pro" : "gemini-2.5-flash";
-
+          
           const geminiHistory = safeHistory.map(m => ({
             role: m.role === "user" ? "user" : "model",
             parts: [{ text: m.content }]
@@ -725,8 +820,8 @@ export default function Dashboard() {
           }
 
           const data = await res.json();
-          aiResponseText = config.format === "openai"
-            ? data.choices?.[0]?.message?.content || ""
+          aiResponseText = config.format === "openai" 
+            ? data.choices?.[0]?.message?.content || "" 
             : data.content?.[0]?.text || "";
         }
 
@@ -734,7 +829,8 @@ export default function Dashboard() {
           id: crypto.randomUUID(), role: "assistant", content: aiResponseText, timestamp: new Date()
         }]);
 
-        const newFiles = extractFiles(aiResponseText, files);
+        // Extract updated blocks dynamically
+        const newFiles = extractFiles(aiResponseText, activeFiles);
         if (newFiles) {
           setFiles(newFiles);
           if (i > 0) {
@@ -745,7 +841,7 @@ export default function Dashboard() {
         }
 
         completedSuccessfully = true;
-        break;
+        break; 
 
       } catch (err) {
         console.warn("Pipeline engine error:", err);
@@ -820,6 +916,14 @@ export default function Dashboard() {
 
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-12 overflow-hidden focus-within:border-indigo-300 focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all">
               <textarea 
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleNewProject();
+                  }
+                }}
                 placeholder="Describe an app to build... e.g. a pomodoro timer with dark mode" 
                 className="w-full resize-none p-5 pb-2 text-slate-700 outline-none text-sm bg-transparent"
                 rows={2}
@@ -827,7 +931,7 @@ export default function Dashboard() {
               <div className="flex justify-between items-center px-5 py-3 bg-white">
                 <span className="text-xs text-slate-400 font-medium">Ready to build</span>
                 <button 
-                  onClick={() => setCurrentPage("chatbox")} 
+                  onClick={handleNewProject} 
                   className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-800 flex items-center gap-2 shadow-sm transition-transform hover:-translate-y-0.5"
                 >
                   <Plus className="h-4 w-4" /> New project
@@ -845,7 +949,14 @@ export default function Dashboard() {
               ) : (
                 <div className="space-y-3">
                   {recentProjects.map((project) => (
-                    <div key={project.id} onClick={() => setCurrentPage("chatbox")} className="bg-white rounded-xl border border-slate-200 p-5 flex justify-between items-center shadow-sm cursor-pointer hover:border-indigo-300 hover:shadow-md transition-all group">
+                    <div 
+                      key={project.id} 
+                      onClick={() => {
+                        navigate({ to: "/p/$projectId", params: { projectId: project.id } });
+                        setCurrentPage("chatbox");
+                      }} 
+                      className="bg-white rounded-xl border border-slate-200 p-5 flex justify-between items-center shadow-sm cursor-pointer hover:border-indigo-300 hover:shadow-md transition-all group"
+                    >
                       <div>
                         <h4 className="font-semibold text-slate-900">{project.name}</h4>
                         <p className="text-xs text-slate-500 mt-1.5">{project.date.toLocaleDateString()} · {project.fileCount} file(s)</p>
@@ -953,6 +1064,7 @@ export default function Dashboard() {
           </header>
 
           <main className="flex flex-1 overflow-hidden relative z-10">
+            {/* LEFT SIDEBAR */}
             <div className="w-64 border-r border-slate-200 bg-white p-4 flex flex-col gap-4 shadow-sm z-10 overflow-y-auto shrink-0">
               <div>
                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">System Context</h3>
@@ -989,10 +1101,14 @@ export default function Dashboard() {
               </div>
             </div>
 
+            {/* MAIN WORKSPACE AREA */}
             <div className="flex flex-1 flex-col overflow-hidden bg-white">
+              {/* Dynamic Sizing View Container based on expanded state */}
               {expandedPanel === null && (
                 <>
+                  {/* TOP HALF: Editor & Live Preview */}
                   <div className="flex-1 min-h-[50%] border-b border-slate-200 flex flex-row overflow-hidden">
+                    {/* 4. Tabbed Code Editor */}
                     <div className="flex-1 border-r border-slate-200 flex flex-col min-w-0 bg-slate-50">
                       <div className="flex items-center justify-between bg-slate-100 border-b border-slate-200 px-2 pt-2 shrink-0">
                         <div className="flex gap-1 overflow-x-auto custom-scrollbar">
@@ -1046,6 +1162,7 @@ export default function Dashboard() {
                       </div>
                     </div>
 
+                    {/* LIVE SANDBOX PREVIEW */}
                     <div className="flex-1 p-4 flex flex-col bg-slate-50/50 min-w-0">
                       <div className="text-xs font-semibold text-slate-500 tracking-wider uppercase mb-2 flex items-center justify-between shrink-0">
                         <span className="flex items-center gap-1.5"><LayoutTemplate className="h-4 w-4 text-indigo-500" /> Live Sandbox</span>
@@ -1068,6 +1185,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
+                  {/* BOTTOM HALF: Chat Interface */}
                   <div className="h-[40%] flex flex-col bg-white overflow-hidden shrink-0">
                     <div className="px-4 py-2 border-b border-slate-100 bg-slate-50 flex items-center justify-between text-xs font-semibold text-slate-600 shrink-0">
                       <span className="flex items-center gap-1.5"><Bot className="h-4 w-4 text-indigo-600" /> AI Assistant Console</span>
@@ -1244,6 +1362,7 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* 🔑 UNIVERSAL MODAL: API KEYS */}
       {isKeyPanelOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
            <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl relative animate-in zoom-in-95 duration-200">
@@ -1310,6 +1429,7 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* 🚀 NEW MODAL: GITHUB EXPORT */}
       {isExportModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in duration-200">
            <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl relative animate-in zoom-in-95 duration-200">
