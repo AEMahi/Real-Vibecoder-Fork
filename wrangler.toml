@@ -8,12 +8,23 @@ kv_namespaces = [
   { binding = "LOGS", id = "your-kv-namespace-id", preview_id = "your-preview-id" }
 ]
 
-# Environment variables (set these in Cloudflare dashboard or locally)
-[env.production]
-vars = { EXPORT_SECRET = "your-secure-random-secret-key-here" }
-
-[env.preview]
-vars = { EXPORT_SECRET = "preview-secret" }
+# EXPORT_SECRET is intentionally NOT defined here. Secrets must never be
+# committed to a config file that lives in version control, even as a
+# placeholder — placeholders get forgotten and shipped as-is more often
+# than you'd think.
+#
+# Set it instead with Wrangler's secret store, which is encrypted and never
+# written to disk in this repo:
+#
+#   wrangler secret put EXPORT_SECRET --env production
+#   wrangler secret put EXPORT_SECRET --env preview
+#
+# You'll be prompted to paste the value interactively. Generate a strong
+# random secret first, e.g.:
+#   openssl rand -hex 32
+#
+# Use a DIFFERENT secret for preview vs production so a leaked preview
+# secret can't be used to pull production logs.
 
 # Routes (optional: if you want this to handle blanksheet.dev subpath)
 # routes = [
