@@ -13,53 +13,65 @@ export interface FilterResult {
 }
 
 // ─── 0. AGE-GATE DETECTION ────────────────────────────────────────────────────
-// Detects signs that the user is likely under 18 (e.g., school assignments,
-// homework, grade levels). These prompts are blocked per COPPA and similar
-// child protection regulations.
+// Detects signs that the user is likely under 18 (e.g., K-12 school assignments,
+// homework, grade levels). College students and users 18+ are allowed.
+// These prompts are blocked per COPPA and similar child protection regulations.
 
-const GRADE_LEVEL_PATTERNS = [
-  /\b(1st|2nd|3rd|4th|5th|6th|7th|8th|9th|10th|11th|12th)\s+(grade|grader)/i,
+const K12_GRADE_LEVEL_PATTERNS = [
+  /\b(1st|2nd|3rd|4th|5th|6th|7th|8th|9th|10th|11th|12th)\s+(grade|grader)\b/i,
   /\bkindergarten\b/i,
   /\b(grade\s+)?k-?12\b/i,
+  /\belementary\s+school\b/i,
+  /\bmiddle\s+school\b/i,
+  /\bhigh\s+school\b/i,
+];
+
+const K12_HOMEWORK_PATTERNS = [
   /\bhomework\b/i,
   /\bschool\s+(assignment|project|essay|report)\b/i,
-  /\b(elementary|middle\s+school|high\s+school)\b/i,
-  /\b(SAT|ACT|college\s+prep)\b/i,
+  /\b(SAT|ACT)\b/i,
 ];
 
-const ACADEMIC_ASSIGNMENT_PATTERNS = [
-  /\b(essay|report|assignment|project|paper|thesis)\b/i,
-  /\bwrite\s+.{0,30}(essay|report|assignment|project|paper)\b/i,
-  /\b(due\s+(tomorrow|soon|this\s+week|next\s+class))\b/i,
-];
-
-const EXPLICIT_AGE_PATTERNS = [
+const EXPLICIT_K12_AGE_PATTERNS = [
   /\b(i'm?\s+)?(in|a)\s+(1st|2nd|3rd|4th|5th|6th|7th|8th|9th|10th|11th|12th)\s+grade\b/i,
   /\b(i'm?\s+)?(10|11|12|13|14|15|16|17)\s+(years?\s+old|year\s+old)\b/i,
   /\b(child|kid|boy|girl)\b.*\b(help|write|do|complete)\b/i,
 ];
 
-function detectMinor(prompt: string): boolean {
-  // Check for explicit grade level mentions
-  if (GRADE_LEVEL_PATTERNS.some(pattern => pattern.test(prompt))) {
+// Patterns indicating college/university context (allows prompts through)
+const COLLEGE_INDICATORS = [
+  /\b(college|university|grad\s+school|graduate\s+program|bachelor|master|phd|dissertation|thesis)\b/i,
+  /\b(18|19|20|21|22|23|24|25)\s+(years?\s+old|year\s+old)\b/i,
+  /\b(adult|freshman|sophomore|junior|senior|college\s+student|university\s+student)\b/i,
+  /\b(course|lecture|semester|finals|midterm|syllabus)\b/i,
+];
+
+function detectK12Minor(prompt: string): boolean {
+  // Check if this is clearly a college/university context
+  if (COLLEGE_INDICATORS.some(pattern => pattern.test(prompt))) {
+    return false; // Allow college students through
+  }
+
+  // Check for explicit K-12 grade level mentions (1st-12th grade)
+  if (K12_GRADE_LEVEL_PATTERNS.some(pattern => pattern.test(prompt))) {
     return true;
   }
 
-  // Check for homework/assignment context
-  const hasAssignmentWords = ACADEMIC_ASSIGNMENT_PATTERNS.some(pattern => pattern.test(prompt));
-  if (hasAssignmentWords) {
-    // Homework + school context is a strong signal
+  // Check for K-12 homework context
+  const hasHomeworkWords = K12_HOMEWORK_PATTERNS.some(pattern => pattern.test(prompt));
+  if (hasHomeworkWords) {
+    // Homework + school context is a strong signal for K-12
     if (/\b(school|class|teacher|classroom)\b/i.test(prompt)) {
-      return true;
-    }
-    // Or if combined with "due" or "soon" language
-    if (/\b(due|submit|turn\s+in|class|assignment)\b/i.test(prompt)) {
+      // But allow if college context is present
+      if (COLLEGE_INDICATORS.some(pattern => pattern.test(prompt))) {
+        return false;
+      }
       return true;
     }
   }
 
-  // Check for explicit age statements
-  if (EXPLICIT_AGE_PATTERNS.some(pattern => pattern.test(prompt))) {
+  // Check for explicit age statements indicating minors
+  if (EXPLICIT_K12_AGE_PATTERNS.some(pattern => pattern.test(prompt))) {
     return true;
   }
 
@@ -231,11 +243,11 @@ function sanityCheck(prompt: string): FilterResult | null {
 // ─── 5. MAIN EXPORT ───────────────────────────────────────────────────────────
 
 export function filterPrompt(rawPrompt: string): FilterResult {
-  // 5a. Age gate check
-  if (detectMinor(rawPrompt)) {
+  // 5a. Age gate check (K-12 minors only; college students 18+ are allowed)
+  if (detectK12Minor(rawPrompt)) {
     return {
       blocked: true,
-      reason: "This application is for users 18 and older. Educational assignment assistance for minors is not available through this tool. Please check with your teacher or school resources for homework help.",
+      reason: "This application is for users 18 and older. Educational assignment assistance for K-12 students is not available through this tool. College students and adults 18+ are welcome to use this tool.",
     };
   }
 
