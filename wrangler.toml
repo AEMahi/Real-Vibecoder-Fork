@@ -1,0 +1,21 @@
+// wrangler.toml
+name = "blanksheet-worker"
+main = "src/worker.ts"
+compatibility_date = "2024-12-01"
+
+# KV namespace binding for storing logs and analytics
+kv_namespaces = [
+  { binding = "LOGS", id = "your-kv-namespace-id", preview_id = "your-preview-id" }
+]
+
+# Environment variables (set these in Cloudflare dashboard or locally)
+[env.production]
+vars = { EXPORT_SECRET = "your-secure-random-secret-key-here" }
+
+[env.preview]
+vars = { EXPORT_SECRET = "preview-secret" }
+
+# Routes (optional: if you want this to handle blanksheet.dev subpath)
+# routes = [
+#   { pattern = "blanksheet.dev/api/*", zone_name = "blanksheet.dev" }
+# ]
