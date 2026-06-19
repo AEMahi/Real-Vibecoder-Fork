@@ -246,9 +246,9 @@ function sanityCheck(prompt: string): FilterResult | null {
 export function filterPrompt(rawPrompt: string): FilterResult {
   const result = filterPromptInner(rawPrompt);
   // Log every result (pass or block) for later review. See promptLog.ts —
-  // entries are kept in localStorage and can be exported to a JSON file
-  // via exportPromptLog() for committing into the repo.
-  logPromptResult({
+  // this is a no-op unless the user has opted in via the
+  // "Use Prompts to Improve (Recommended)" button (enableFileLogging()).
+  void logPromptResult({
     prompt: rawPrompt,
     blocked: result.blocked,
     reason: result.reason,
@@ -324,7 +324,7 @@ function filterPromptInner(rawPrompt: string): FilterResult {
 export async function filterPromptWithContext(rawPrompt: string): Promise<FilterResult> {
   const regexResult = filterPromptInner(rawPrompt);
   if (regexResult.blocked) {
-    logPromptResult({
+    void logPromptResult({
       prompt: rawPrompt,
       blocked: true,
       reason: regexResult.reason,
@@ -336,7 +336,7 @@ export async function filterPromptWithContext(rawPrompt: string): Promise<Filter
   const semanticResult = await classifyIntent(promptToCheck);
 
   if (semanticResult.blocked) {
-    logPromptResult({
+    void logPromptResult({
       prompt: rawPrompt,
       blocked: true,
       reason: semanticResult.reason,
@@ -348,7 +348,7 @@ export async function filterPromptWithContext(rawPrompt: string): Promise<Filter
     };
   }
 
-  logPromptResult({
+  void logPromptResult({
     prompt: rawPrompt,
     blocked: false,
     sanitized: regexResult.sanitized,
