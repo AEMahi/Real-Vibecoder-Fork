@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PProjectIdRouteImport } from './routes/p.$projectId'
+import { Route as DevAnalyticsRouteImport } from './routes/dev/analytics'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,30 +23,39 @@ const PProjectIdRoute = PProjectIdRouteImport.update({
   path: '/p/$projectId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DevAnalyticsRoute = DevAnalyticsRouteImport.update({
+  id: '/dev/analytics',
+  path: '/dev/analytics',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/dev/analytics': typeof DevAnalyticsRoute
   '/p/$projectId': typeof PProjectIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/dev/analytics': typeof DevAnalyticsRoute
   '/p/$projectId': typeof PProjectIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/dev/analytics': typeof DevAnalyticsRoute
   '/p/$projectId': typeof PProjectIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/p/$projectId'
+  fullPaths: '/' | '/dev/analytics' | '/p/$projectId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/p/$projectId'
-  id: '__root__' | '/' | '/p/$projectId'
+  to: '/' | '/dev/analytics' | '/p/$projectId'
+  id: '__root__' | '/' | '/dev/analytics' | '/p/$projectId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DevAnalyticsRoute: typeof DevAnalyticsRoute
   PProjectIdRoute: typeof PProjectIdRoute
 }
 
@@ -65,11 +75,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PProjectIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dev/analytics': {
+      id: '/dev/analytics'
+      path: '/dev/analytics'
+      fullPath: '/dev/analytics'
+      preLoaderRoute: typeof DevAnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DevAnalyticsRoute: DevAnalyticsRoute,
   PProjectIdRoute: PProjectIdRoute,
 }
 export const routeTree = rootRouteImport
