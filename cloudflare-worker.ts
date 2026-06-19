@@ -7,9 +7,14 @@
 //
 // Requires Cloudflare KV binding named "LOGS" in wrangler.toml:
 //   kv_namespaces = [ { binding = "LOGS", id = "..." } ]
+//
+// Requires EXPORT_SECRET to be set as a Cloudflare secret (NOT a plain var):
+//   wrangler secret put EXPORT_SECRET
+// Do NOT put this value in wrangler.toml or any committed file.
 
 export interface Env {
   LOGS: KVNamespace;
+  EXPORT_SECRET: string;
 }
 
 interface AnalyticsData {
@@ -64,14 +69,81 @@ async function getUserFingerprint(request: Request): Promise<string> {
   return hex.slice(0, 16); // short fingerprint
 }
 
+// ─── SECURE SECRET COMPARISON ──────────────────────────────────────────────
+// A plain `===` check on secrets leaks timing information (how many leading
+// characters matched) that an attacker can use to guess the secret byte by
+// byte. crypto.subtle.timingSafeEqual style comparison fixes that.
+function timingSafeEqual(a: string, b: string): boolean {
+  const aBytes = new TextEncoder().encode(a);
+  const bBytes = new TextEncoder().encode(b);
+  // Lengths differing is itself fine to leak (lengths aren't secret), but we
+  // still compare against a fixed-length buffer to avoid early return.
+  const maxLen = Math.max(aBytes.length, bBytes.length, 1);
+  const aPadded = new Uint8Array(maxLen);
+  const bPadded = new Uint8Array(maxLen);
+  aPadded.set(aBytes);
+  bPadded.set(bBytes);
+
+  let diff = aBytes.length ^ bBytes.length;
+  for (let i = 0; i < maxLen; i++) {
+    diff |= aPadded[i] ^ bPadded[i];
+  }
+  return diff === 0;
+}
+
+function isAuthorized(request: Request, env: Env): boolean {
+  if (!env.EXPORT_SECRET) {
+    // Misconfigured deployment — fail closed, never allow export.
+    return false;
+  }
+  const authHeader = request.headers.get("Authorization") || "";
+  const expected = `Bearer ${env.EXPORT_SECRET}`;
+  return timingSafeEqual(authHeader, expected);
+}
+
+// ─── BASIC RATE LIMITING FOR LOG INGESTION ────────────────────────────────
+// Prevents a single client from flooding KV with writes. Tracked per
+// fingerprint in KV itself (works across Worker instances, unlike in-memory).
+const INGEST_RATE_LIMIT = {
+  MAX_REQUESTS: 30,
+  WINDOW_SECONDS: 60,
+};
+
+async function checkIngestRateLimit(env: Env, userId: string): Promise<boolean> {
+  const key = `ratelimit:${userId}`;
+  const current = await env.LOGS.get(key);
+  const count = current ? parseInt(current, 10) : 0;
+  if (count >= INGEST_RATE_LIMIT.MAX_REQUESTS) {
+    return false;
+  }
+  await env.LOGS.put(key, String(count + 1), {
+    expirationTtl: INGEST_RATE_LIMIT.WINDOW_SECONDS,
+  });
+  return true;
+}
+
+// Restrict CORS to your actual deployed origins instead of "*". Update this
+// list with the real domain(s) your app is served from.
+const ALLOWED_ORIGINS = [
+  "https://blanksheet.dev",
+  "https://www.blanksheet.dev",
+];
+
+function corsHeadersFor(request: Request): Record<string, string> {
+  const origin = request.headers.get("Origin") || "";
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Vary": "Origin",
+  };
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    const corsHeaders = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    };
+    const corsHeaders = corsHeadersFor(request);
 
     // CORS preflight
     if (request.method === "OPTIONS") {
@@ -84,7 +156,6 @@ export default {
         const userId = await getUserFingerprint(request);
         const analyticsKey = "analytics:main";
 
-        // Read current analytics
         let analytics: AnalyticsData = {
           uniqueUsers: new Set(),
           totalVisits: 0,
@@ -100,12 +171,10 @@ export default {
           analytics.avgSessionDuration = parsed.avgSessionDuration || 0;
         }
 
-        // Update with this visit
         analytics.uniqueUsers.add(userId);
         analytics.totalVisits += 1;
         analytics.lastUpdated = new Date().toISOString();
 
-        // Store updated analytics
         await env.LOGS.put(
           analyticsKey,
           JSON.stringify({
@@ -131,6 +200,16 @@ export default {
     // POST /api/prompt-log - store prompt-filter results
     if (url.pathname === "/api/prompt-log" && request.method === "POST") {
       try {
+        const userId = await getUserFingerprint(request);
+
+        const allowed = await checkIngestRateLimit(env, userId);
+        if (!allowed) {
+          return new Response(JSON.stringify({ error: "Rate limit exceeded" }), {
+            status: 429,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
         const body = await request.json();
         if (typeof body.prompt !== "string" || typeof body.blocked !== "boolean") {
           return new Response(JSON.stringify({ error: "Invalid payload" }), {
@@ -139,8 +218,14 @@ export default {
           });
         }
 
-        const userId = await getUserFingerprint(request);
-        
+        // Cap prompt size server-side too, regardless of what the client sent.
+        if (body.prompt.length > 8000) {
+          return new Response(JSON.stringify({ error: "Prompt too long" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
         // Server-side PII redaction (defense in depth)
         const redactedPrompt = redactPIIServer(body.prompt);
 
@@ -149,9 +234,9 @@ export default {
           userId,
           prompt: redactedPrompt,
           blocked: body.blocked,
-          reason: body.reason,
-          sanitized: body.sanitized,
-          hadPIIRedactions: body.hadPIIRedactions,
+          reason: typeof body.reason === "string" ? body.reason : undefined,
+          sanitized: typeof body.sanitized === "string" ? body.sanitized : undefined,
+          hadPIIRedactions: Boolean(body.hadPIIRedactions),
         };
 
         // Append to KV as a newline-delimited JSON stream
@@ -175,18 +260,16 @@ export default {
     }
 
     // GET /api/prompt-log/export - fetch all logs as JSON array (for GitHub commit)
-    // Requires Authorization header: Bearer <EXPORT_SECRET>
+    // Requires Authorization header: Bearer <EXPORT_SECRET>, checked against the
+    // real Cloudflare secret (env.EXPORT_SECRET), not a hardcoded placeholder.
     if (url.pathname === "/api/prompt-log/export" && request.method === "GET") {
+      if (!isAuthorized(request, env)) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       try {
-        const authHeader = request.headers.get("Authorization") || "";
-        const exportSecret = "your-secret-export-key"; // set via environment variable in wrangler.toml
-        if (authHeader !== `Bearer ${exportSecret}`) {
-          return new Response(JSON.stringify({ error: "Unauthorized" }), {
-            status: 401,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-
         const logsKey = "logs:prompts";
         const raw = (await env.LOGS.get(logsKey)) || "";
         const entries = raw
@@ -207,16 +290,13 @@ export default {
 
     // GET /api/analytics/export - fetch analytics (for your own dashboard)
     if (url.pathname === "/api/analytics/export" && request.method === "GET") {
+      if (!isAuthorized(request, env)) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       try {
-        const authHeader = request.headers.get("Authorization") || "";
-        const exportSecret = "your-secret-export-key"; // same secret as above
-        if (authHeader !== `Bearer ${exportSecret}`) {
-          return new Response(JSON.stringify({ error: "Unauthorized" }), {
-            status: 401,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-
         const analyticsKey = "analytics:main";
         const raw = await env.LOGS.get(analyticsKey);
         const analytics = raw ? JSON.parse(raw) : { uniqueUsers: [], totalVisits: 0 };
