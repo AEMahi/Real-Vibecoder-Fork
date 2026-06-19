@@ -144,14 +144,14 @@ const HARD_BLOCK_PATTERNS: { pattern: RegExp; reason: string; contextSensitive?:
 // students, and IT support requests.
 
 const DEFENSIVE_CONTEXT_WORDS =
-  /(detect|remove|removal|prevent|prevention|protect|protection|defend|defense|defence|scan|scanner|scanning|analy[sz]e|analysis|identify|clean|quarantine|patch|secure|security|harden|mitigat|bloc[...]
+  /(detect|remove|removal|prevent|prevention|protect|protection|defend|defense|defence|scan|scanner|scanning|analy[sz]e|analysis|identify|clean|quarantine|patch|secure|security|harden|mitigat|block|eliminate|eradicate|educational|study|research|learning|understand|explain)/i;
 
 // Words that indicate the request is still about *creating* the harmful
 // artifact even if defensive words appear nearby (e.g. "write a virus that
 // evades antivirus detection" should NOT be let through just because
 // "detection" appears).
 const OFFENSIVE_OVERRIDE_WORDS =
-  /(evade|evading|bypass(?:ing)?|undetectable|avoid\s+detection|disable\s+(the\s+)?(antivirus|defender|security)|for\s+(real|actual)\s+(victims?|targets?)|deploy\s+(it|this)\s+(against|on)|withou[...]
+  /(evade|evading|bypass(?:ing)?|undetectable|avoid\s+detection|disable\s+(the\s+)?(antivirus|defender|security)|for\s+(real|actual)\s+(victims?|targets?)|deploy\s+(it|this)\s+(against|on)|without\s+consent|without\s+permission|without\s+knowledge)/i;
 
 function hasDefensiveContext(prompt: string, matchIndex: number, matchLength: number): boolean {
   // Look at a window of ~60 characters before and after the matched phrase
