@@ -3,6 +3,7 @@
 // Import and call `filterPrompt(input)` before sendToAI() in handleFormSubmit.
 
 import { classifyIntent, preloadSemanticFilter } from "./semanticIntentFilter";
+import { logPromptResult } from "./promptLog";
 
 export { preloadSemanticFilter };
 
@@ -243,6 +244,20 @@ function sanityCheck(prompt: string): FilterResult | null {
 // ─── 5. MAIN EXPORT ───────────────────────────────────────────────────────────
 
 export function filterPrompt(rawPrompt: string): FilterResult {
+  const result = filterPromptInner(rawPrompt);
+  // Log every result (pass or block) for later review. See promptLog.ts —
+  // entries are kept in localStorage and can be exported to a JSON file
+  // via exportPromptLog() for committing into the repo.
+  logPromptResult({
+    prompt: rawPrompt,
+    blocked: result.blocked,
+    reason: result.reason,
+    sanitized: result.sanitized,
+  });
+  return result;
+}
+
+function filterPromptInner(rawPrompt: string): FilterResult {
   // 5a. Age gate check (K-12 minors only; college students 18+ are allowed)
   if (detectK12Minor(rawPrompt)) {
     return {
@@ -307,8 +322,13 @@ export function filterPrompt(rawPrompt: string): FilterResult {
 // yet), just call the synchronous filterPrompt() directly as before.
 
 export async function filterPromptWithContext(rawPrompt: string): Promise<FilterResult> {
-  const regexResult = filterPrompt(rawPrompt);
+  const regexResult = filterPromptInner(rawPrompt);
   if (regexResult.blocked) {
+    logPromptResult({
+      prompt: rawPrompt,
+      blocked: true,
+      reason: regexResult.reason,
+    });
     return regexResult; // already blocked, no need to run the model
   }
 
@@ -316,11 +336,22 @@ export async function filterPromptWithContext(rawPrompt: string): Promise<Filter
   const semanticResult = await classifyIntent(promptToCheck);
 
   if (semanticResult.blocked) {
+    logPromptResult({
+      prompt: rawPrompt,
+      blocked: true,
+      reason: semanticResult.reason,
+      sanitized: regexResult.sanitized,
+    });
     return {
       blocked: true,
       reason: semanticResult.reason,
     };
   }
 
+  logPromptResult({
+    prompt: rawPrompt,
+    blocked: false,
+    sanitized: regexResult.sanitized,
+  });
   return regexResult; // pass through with any sanitization already applied
 }
