@@ -28,6 +28,11 @@ export default function LandingPage() {
       )}
 
       <div className="flex min-h-screen flex-col items-center justify-center bg-transparent p-4 text-white">
+        <div className="fixed top-6 right-8">
+          <span className="text-2xl font-extrabold tracking-tight text-white">
+            BlankSheet
+          </span>
+        </div>
         <div className="mx-auto max-w-3xl text-center">
 
           <div className="mb-6 flex justify-center">
