@@ -9,10 +9,8 @@ import {
   Key, X, Trash2, CheckCircle2, AlertTriangle, RefreshCw, 
   Send, Bot, User, Sparkles, Plus, ListTodo, Timer, Wrench, RotateCcw, Play, Home, ArrowRight, LayoutTemplate, Github, Maximize2, Minimize2
 } from "lucide-react";
-import { filterPromptWithContext, preloadSemanticFilter } from "./promptFilter";
-import { enableFileLogging, disableFileLogging } from "./promptLog";
-
-
+import { filterPromptWithContext, preloadSemanticFilter } from "../promptFilter";
+import { enableFileLogging, disableFileLogging } from "../promptLog";
 
 export const Route = createFileRoute("/p/$projectId")({
   component: Dashboard,
@@ -236,7 +234,6 @@ export default function Dashboard() {
   const [githubToken, setGithubToken] = useState<string>("");
   const [exportCommitMessage, setExportCommitMessage] = useState<string>("Code update by VibeCoder");
   const [isExporting, setIsExporting] = useState<boolean>(false);
-  const [loggingOn, setLoggingOn] = useState<boolean>(false);
 
   // Bundles the dynamic files dynamically for the iframe
   const bundledPreview = () => {
@@ -372,18 +369,6 @@ export default function Dashboard() {
   // Dynamic Client-side GitHub Export Handler
   const handleExportGitHub = async () => {
     setIsExportModalOpen(true);
-  };
-
-  // Opt-in: send prompts to the backend log endpoint for review
-  const handleToggleImproveLogging = () => {
-    if (loggingOn) {
-      disableFileLogging();
-      setLoggingOn(false);
-      return;
-    }
-    enableFileLogging();
-    setLoggingOn(true);
-    setNotification({ type: "success", message: "Now logging prompts to the server for review." });
   };
 
   const executeGitHubExport = async () => {
@@ -1056,19 +1041,6 @@ export default function Dashboard() {
                 className="inline-flex h-9 items-center justify-center gap-2 rounded-lg px-4 text-xs font-bold text-slate-700 bg-white border border-slate-200 shadow-sm hover:bg-slate-50 transition-all hover:-translate-y-[1px]"
               >
                 <Github className="h-3.5 w-3.5" /><span>Export</span>
-              </button>
-
-              <button
-                onClick={handleToggleImproveLogging}
-                title="Saves your prompts to a local file you choose, so you can review them later to improve the filter."
-                className={`inline-flex h-9 items-center justify-center gap-2 rounded-lg px-4 text-xs font-bold shadow-sm transition-all hover:-translate-y-[1px] ${
-                  loggingOn
-                    ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                    : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
-                }`}
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                <span>{loggingOn ? "Logging Prompts to Improve" : "Use Prompts to Improve (Recommended)"}</span>
               </button>
 
               <button 
