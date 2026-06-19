@@ -10,7 +10,7 @@ import {
   Send, Bot, User, Sparkles, Plus, ListTodo, Timer, Wrench, RotateCcw, Play, Home, ArrowRight, LayoutTemplate, Github, Maximize2, Minimize2
 } from "lucide-react";
 import { filterPromptWithContext, preloadSemanticFilter } from "./promptFilter";
-import { enableFileLogging, disableFileLogging, isFileSystemAccessSupported } from "./promptLog";
+import { enableFileLogging, disableFileLogging } from "./promptLog";
 
 
 
@@ -374,25 +374,16 @@ export default function Dashboard() {
     setIsExportModalOpen(true);
   };
 
-  // Opt-in: write prompts to a local log file the user picks, for review
-  const handleToggleImproveLogging = async () => {
+  // Opt-in: send prompts to the backend log endpoint for review
+  const handleToggleImproveLogging = () => {
     if (loggingOn) {
       disableFileLogging();
       setLoggingOn(false);
       return;
     }
-    if (!isFileSystemAccessSupported()) {
-      setNotification({
-        type: "error",
-        message: "This feature needs Chrome or Edge — it writes directly to a file you choose.",
-      });
-      return;
-    }
-    const granted = await enableFileLogging();
-    setLoggingOn(granted);
-    if (granted) {
-      setNotification({ type: "success", message: "Now logging prompts to your chosen file for review." });
-    }
+    enableFileLogging();
+    setLoggingOn(true);
+    setNotification({ type: "success", message: "Now logging prompts to the server for review." });
   };
 
   const executeGitHubExport = async () => {
