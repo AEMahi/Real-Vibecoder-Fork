@@ -10,7 +10,7 @@ import {
   Send, Bot, User, Sparkles, Plus, ListTodo, Timer, Wrench, RotateCcw, Play, Home, ArrowRight, LayoutTemplate, Github, Maximize2, Minimize2
 } from "lucide-react";
 import { filterPromptWithContext, preloadSemanticFilter } from "../promptFilter";
-import { enableFileLogging, disableFileLogging } from "../promptLog";
+import { enableFileLogging, disableFileLogging, isLoggingEnabled } from "../promptLog";
 
 export const Route = createFileRoute("/p/$projectId")({
   component: Dashboard,
@@ -203,6 +203,7 @@ export default function Dashboard() {
   const [systemPrompt, setSystemPrompt] = useState<string>("");
 
   const [isKeyPanelOpen, setIsKeyPanelOpen] = useState<boolean>(false);
+  const [promptLoggingEnabled, setPromptLoggingEnabled] = useState<boolean>(() => isLoggingEnabled());
   const [keyProvider, setKeyProvider] = useState<KeyProvider>("gemini");
   const [inputKey, setInputKey] = useState<string>("");
   const [customLabel, setCustomLabel] = useState<string>("");
@@ -363,6 +364,20 @@ export default function Dashboard() {
       // Nothing typed
       setMessages(cleanMessages);
       setChatInput("");
+    }
+  };
+
+  // Prompt logging opt-in toggle. Off by default — prompts are only ever
+  // sent to the logging endpoint after the user explicitly clicks this on.
+  const handleTogglePromptLogging = () => {
+    if (promptLoggingEnabled) {
+      disableFileLogging();
+      setPromptLoggingEnabled(false);
+      setNotification({ type: "success", message: "Prompt logging turned off." });
+    } else {
+      enableFileLogging();
+      setPromptLoggingEnabled(true);
+      setNotification({ type: "success", message: "Thanks! Your prompts will now help improve the filter (PII is redacted before sending)." });
     }
   };
 
@@ -1041,6 +1056,19 @@ export default function Dashboard() {
                 className="inline-flex h-9 items-center justify-center gap-2 rounded-lg px-4 text-xs font-bold text-slate-700 bg-white border border-slate-200 shadow-sm hover:bg-slate-50 transition-all hover:-translate-y-[1px]"
               >
                 <Github className="h-3.5 w-3.5" /><span>Export</span>
+              </button>
+
+              <button
+                onClick={handleTogglePromptLogging}
+                title={promptLoggingEnabled ? "Click to stop sharing your prompts" : "Click to help improve the prompt filter by sharing your prompts (PII redacted)"}
+                className={`inline-flex h-9 items-center justify-center gap-2 rounded-lg px-4 text-xs font-bold border shadow-sm transition-all hover:-translate-y-[1px] ${
+                  promptLoggingEnabled
+                    ? "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
+                    : "text-slate-700 bg-white border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>{promptLoggingEnabled ? "Sharing Prompts" : "Use Prompts to Improve"}</span>
               </button>
 
               <button 
