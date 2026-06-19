@@ -9,7 +9,7 @@ import {
   Key, X, Trash2, CheckCircle2, AlertTriangle, RefreshCw, 
   Send, Bot, User, Sparkles, Plus, ListTodo, Timer, Wrench, RotateCcw, Play, Home, ArrowRight, LayoutTemplate, Github, Maximize2, Minimize2
 } from "lucide-react";
-import { filterPrompt } from "./promptFilter";
+import { filterPromptWithContext, preloadSemanticFilter } from "./promptFilter";
 
 
 
@@ -223,6 +223,7 @@ export default function Dashboard() {
   ]);
   const [chatInput, setChatInput] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [isFiltering, setIsFiltering] = useState<boolean>(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Panel expansion states
@@ -272,6 +273,13 @@ export default function Dashboard() {
       return () => clearTimeout(timer);
     }
   }, [notification]);
+
+  // Pre-warm the semantic intent model in the background on mount so the
+  // first chat submission doesn't have to wait on the ~13MB model download.
+  // Safe no-op if it's already loaded; fails silently if offline/blocked.
+  useEffect(() => {
+    preloadSemanticFilter();
+  }, []);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -599,13 +607,20 @@ export default function Dashboard() {
     sendToAI(errorPrompt);
   };
 
-  const handleFormSubmit = (e?: React.FormEvent) => {
+  const handleFormSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!chatInput.trim() || isGenerating) return;
+    if (!chatInput.trim() || isGenerating || isFiltering) return;
     const rawPrompt = chatInput.trim();
 
-    // — Prompt filter ————————————————————————————————
-    const filterResult = filterPrompt(rawPrompt);
+    // — Prompt filter (regex + semantic context check) ————————————————
+    setIsFiltering(true);
+    let filterResult;
+    try {
+      filterResult = await filterPromptWithContext(rawPrompt);
+    } finally {
+      setIsFiltering(false);
+    }
+
     if (filterResult.blocked) {
       setChatInput("");
       setMessages((prev) => [
@@ -1226,8 +1241,8 @@ export default function Dashboard() {
                     </div>
 
                     <form onSubmit={handleFormSubmit} className="p-3 border-t border-slate-200 bg-slate-50 flex gap-2 shrink-0">
-                      <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={savedProviders.length === 0 ? "⚠️ Add an API key using the config button above to chat..." : "Ask AI to edit the code above..."} disabled={isGenerating || savedProviders.length === 0} className="flex-1 h-11 px-4 rounded-lg border border-slate-200 bg-white shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 placeholder:text-slate-400 disabled:opacity-50" />
-                      <button type="submit" disabled={!chatInput.trim() || isGenerating || savedProviders.length === 0} className="h-11 w-11 shrink-0 inline-flex items-center justify-center rounded-lg bg-slate-900 text-white transition-colors hover:bg-slate-800 shadow-sm disabled:opacity-40"><Send className="h-4 w-4" /></button>
+                      <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={savedProviders.length === 0 ? "⚠️ Add an API key using the config button above to chat..." : isFiltering ? "Checking prompt..." : "Ask AI to edit the code above..."} disabled={isGenerating || isFiltering || savedProviders.length === 0} className="flex-1 h-11 px-4 rounded-lg border border-slate-200 bg-white shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 placeholder:text-slate-400 disabled:opacity-50" />
+                      <button type="submit" disabled={!chatInput.trim() || isGenerating || isFiltering || savedProviders.length === 0} className="h-11 w-11 shrink-0 inline-flex items-center justify-center rounded-lg bg-slate-900 text-white transition-colors hover:bg-slate-800 shadow-sm disabled:opacity-40">{isFiltering ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</button>
                     </form>
                   </div>
                 </>
@@ -1352,8 +1367,8 @@ export default function Dashboard() {
                   </div>
 
                   <form onSubmit={handleFormSubmit} className="p-3 border-t border-slate-200 bg-slate-50 flex gap-2 shrink-0">
-                    <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={savedProviders.length === 0 ? "⚠️ Add an API key using the config button above to chat..." : "Ask AI to edit the code above..."} disabled={isGenerating || savedProviders.length === 0} className="flex-1 h-11 px-4 rounded-lg border border-slate-200 bg-white shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 placeholder:text-slate-400 disabled:opacity-50" />
-                    <button type="submit" disabled={!chatInput.trim() || isGenerating || savedProviders.length === 0} className="h-11 w-11 shrink-0 inline-flex items-center justify-center rounded-lg bg-slate-900 text-white transition-colors hover:bg-slate-800 shadow-sm disabled:opacity-40"><Send className="h-4 w-4" /></button>
+                    <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={savedProviders.length === 0 ? "⚠️ Add an API key using the config button above to chat..." : isFiltering ? "Checking prompt..." : "Ask AI to edit the code above..."} disabled={isGenerating || isFiltering || savedProviders.length === 0} className="flex-1 h-11 px-4 rounded-lg border border-slate-200 bg-white shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 placeholder:text-slate-400 disabled:opacity-50" />
+                    <button type="submit" disabled={!chatInput.trim() || isGenerating || isFiltering || savedProviders.length === 0} className="h-11 w-11 shrink-0 inline-flex items-center justify-center rounded-lg bg-slate-900 text-white transition-colors hover:bg-slate-800 shadow-sm disabled:opacity-40">{isFiltering ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</button>
                   </form>
                 </div>
               )}
