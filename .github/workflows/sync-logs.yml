@@ -1,0 +1,43 @@
+name: Sync Prompt Logs from Cloudflare
+
+on:
+  # Run every 6 hours to keep logs fresh
+  schedule:
+    - cron: "0 */6 * * *"
+  # Also allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  sync-logs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+
+      - name: Pull prompt logs from Cloudflare
+        env:
+          CLOUDFLARE_WORKER_URL: ${{ secrets.CLOUDFLARE_WORKER_URL }}
+          CLOUDFLARE_EXPORT_SECRET: ${{ secrets.CLOUDFLARE_EXPORT_SECRET }}
+        run: |
+          node scripts/sync-prompt-logs.js
+
+      - name: Commit and push logs
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          # Only commit if logs file has changed
+          if git diff --quiet logs/prompt-filter-log.json; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          
+          git add logs/prompt-filter-log.json
+          git commit -m "chore: sync prompt filter logs from Cloudflare Worker"
+          git push
