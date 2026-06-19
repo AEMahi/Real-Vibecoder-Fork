@@ -12,6 +12,60 @@ export interface FilterResult {
   sanitized?: string; // cleaned version of the prompt if minor issues found
 }
 
+// ─── 0. AGE-GATE DETECTION ────────────────────────────────────────────────────
+// Detects signs that the user is likely under 18 (e.g., school assignments,
+// homework, grade levels). These prompts are blocked per COPPA and similar
+// child protection regulations.
+
+const GRADE_LEVEL_PATTERNS = [
+  /\b(1st|2nd|3rd|4th|5th|6th|7th|8th|9th|10th|11th|12th)\s+(grade|grader)/i,
+  /\bkindergarten\b/i,
+  /\b(grade\s+)?k-?12\b/i,
+  /\bhomework\b/i,
+  /\bschool\s+(assignment|project|essay|report)\b/i,
+  /\b(elementary|middle\s+school|high\s+school)\b/i,
+  /\b(SAT|ACT|college\s+prep)\b/i,
+];
+
+const ACADEMIC_ASSIGNMENT_PATTERNS = [
+  /\b(essay|report|assignment|project|paper|thesis)\b/i,
+  /\bwrite\s+.{0,30}(essay|report|assignment|project|paper)\b/i,
+  /\b(due\s+(tomorrow|soon|this\s+week|next\s+class))\b/i,
+];
+
+const EXPLICIT_AGE_PATTERNS = [
+  /\b(i'm?\s+)?(in|a)\s+(1st|2nd|3rd|4th|5th|6th|7th|8th|9th|10th|11th|12th)\s+grade\b/i,
+  /\b(i'm?\s+)?(10|11|12|13|14|15|16|17)\s+(years?\s+old|year\s+old)\b/i,
+  /\b(child|kid|boy|girl)\b.*\b(help|write|do|complete)\b/i,
+];
+
+function detectMinor(prompt: string): boolean {
+  // Check for explicit grade level mentions
+  if (GRADE_LEVEL_PATTERNS.some(pattern => pattern.test(prompt))) {
+    return true;
+  }
+
+  // Check for homework/assignment context
+  const hasAssignmentWords = ACADEMIC_ASSIGNMENT_PATTERNS.some(pattern => pattern.test(prompt));
+  if (hasAssignmentWords) {
+    // Homework + school context is a strong signal
+    if (/\b(school|class|teacher|classroom)\b/i.test(prompt)) {
+      return true;
+    }
+    // Or if combined with "due" or "soon" language
+    if (/\b(due|submit|turn\s+in|class|assignment)\b/i.test(prompt)) {
+      return true;
+    }
+  }
+
+  // Check for explicit age statements
+  if (EXPLICIT_AGE_PATTERNS.some(pattern => pattern.test(prompt))) {
+    return true;
+  }
+
+  return false;
+}
+
 // ─── 1. HARD-BLOCKED CATEGORIES ───────────────────────────────────────────────
 // These patterns cause an immediate block with no sanitization fallback.
 
@@ -90,14 +144,14 @@ const HARD_BLOCK_PATTERNS: { pattern: RegExp; reason: string; contextSensitive?:
 // students, and IT support requests.
 
 const DEFENSIVE_CONTEXT_WORDS =
-  /(detect|remove|removal|prevent|prevention|protect|protection|defend|defense|defence|scan|scanner|scanning|analy[sz]e|analysis|identify|clean|quarantine|patch|secure|security|harden|mitigat|block|antivirus|anti-virus|anti-malware|signature|heuristic|sandbox(?:ed)?|reverse[- ]engineer|study|research|educational|learn(?:ing)?|understand|explain|how\s+(it|they|malware|viruses?)\s+works?|course|class|assignment|capture[- ]the[- ]flag|\bctf\b)/i;
+  /(detect|remove|removal|prevent|prevention|protect|protection|defend|defense|defence|scan|scanner|scanning|analy[sz]e|analysis|identify|clean|quarantine|patch|secure|security|harden|mitigat|bloc[...]
 
 // Words that indicate the request is still about *creating* the harmful
 // artifact even if defensive words appear nearby (e.g. "write a virus that
 // evades antivirus detection" should NOT be let through just because
 // "detection" appears).
 const OFFENSIVE_OVERRIDE_WORDS =
-  /(evade|evading|bypass(?:ing)?|undetectable|avoid\s+detection|disable\s+(the\s+)?(antivirus|defender|security)|for\s+(real|actual)\s+(victims?|targets?)|deploy\s+(it|this)\s+(against|on)|without\s+(their|the)\s+(knowledge|permission|consent))/i;
+  /(evade|evading|bypass(?:ing)?|undetectable|avoid\s+detection|disable\s+(the\s+)?(antivirus|defender|security)|for\s+(real|actual)\s+(victims?|targets?)|deploy\s+(it|this)\s+(against|on)|withou[...]
 
 function hasDefensiveContext(prompt: string, matchIndex: number, matchLength: number): boolean {
   // Look at a window of ~60 characters before and after the matched phrase
@@ -124,7 +178,7 @@ const SANITIZE_PATTERNS: RegExp[] = [
   /(\[INST\]|\[\/INST\])/gi,   // Llama instruction tags
 ];
 
-// ─── 3. RATE LIMITER ──────────────────────────────────────────────────────────
+// ─── 3. RATE LIMITER ───────────────────────────────────────────────────────────
 // Blocks more than MAX_REQUESTS prompts within WINDOW_MS milliseconds
 // to prevent automated abuse / prompt-flooding.
 
@@ -177,11 +231,19 @@ function sanityCheck(prompt: string): FilterResult | null {
 // ─── 5. MAIN EXPORT ───────────────────────────────────────────────────────────
 
 export function filterPrompt(rawPrompt: string): FilterResult {
-  // 5a. Sanity check
+  // 5a. Age gate check
+  if (detectMinor(rawPrompt)) {
+    return {
+      blocked: true,
+      reason: "This application is for users 18 and older. Educational assignment assistance for minors is not available through this tool. Please check with your teacher or school resources for homework help.",
+    };
+  }
+
+  // 5b. Sanity check
   const sanityResult = sanityCheck(rawPrompt);
   if (sanityResult) return sanityResult;
 
-  // 5b. Rate limit
+  // 5c. Rate limit
   if (!checkRateLimit()) {
     return {
       blocked: true,
@@ -189,7 +251,7 @@ export function filterPrompt(rawPrompt: string): FilterResult {
     };
   }
 
-  // 5c. Hard block
+  // 5d. Hard block
   for (const { pattern, reason, contextSensitive } of HARD_BLOCK_PATTERNS) {
     // Need a fresh non-global regex for .exec to get a match index reliably
     const execPattern = new RegExp(pattern.source, pattern.flags.replace("g", ""));
@@ -204,7 +266,7 @@ export function filterPrompt(rawPrompt: string): FilterResult {
     }
   }
 
-  // 5d. Sanitize (soft clean — strip injected turn markers / special tokens)
+  // 5e. Sanitize (soft clean — strip injected turn markers / special tokens)
   let sanitized = rawPrompt;
   for (const pattern of SANITIZE_PATTERNS) {
     sanitized = sanitized.replace(pattern, "");
@@ -220,7 +282,7 @@ export function filterPrompt(rawPrompt: string): FilterResult {
 }
 
 // ─── 6. COMBINED FILTER (regex + semantic) ────────────────────────────────────
-// Runs the fast synchronous regex filter first (5c above). Only if that
+// Runs the fast synchronous regex filter first (5d above). Only if that
 // passes does it fall through to the semantic similarity check, which is
 // async because it needs to run the embedding model. This keeps the common
 // case (obviously fine prompts) fast, and only pays the model cost when needed.
