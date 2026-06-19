@@ -2,7 +2,7 @@
 // Drop this file into your project alongside Dashboard.tsx.
 // Import and call `filterPrompt(input)` before sendToAI() in handleFormSubmit.
 
-import { classifyIntent, preloadSemanticFilter } from "./routes/semanticIntentFilter";
+import { classifyIntent, preloadSemanticFilter } from "./semanticIntentFilter";
 import { logPromptResult } from "./promptLog";
 
 export { preloadSemanticFilter };
@@ -25,6 +25,7 @@ const K12_GRADE_LEVEL_PATTERNS = [
   /\belementary\s+school\b/i,
   /\bmiddle\s+school\b/i,
   /\bhigh\s+school\b/i,
+  /\bjunior\s+high\b/i,
 ];
 
 const K12_HOMEWORK_PATTERNS = [
@@ -33,23 +34,70 @@ const K12_HOMEWORK_PATTERNS = [
   /\b(SAT|ACT)\b/i,
 ];
 
+// Broad coverage for someone directly or indirectly disclosing they are
+// under 18. Deliberately wide: false positives here just mean an adult
+// has to rephrase, but false negatives mean a minor gets treated as an
+// adult. When in doubt, this list should err toward blocking.
 const EXPLICIT_K12_AGE_PATTERNS = [
-  /\b(i'm?\s+)?(in|a)\s+(1st|2nd|3rd|4th|5th|6th|7th|8th|9th|10th|11th|12th)\s+grade\b/i,
-  /\b(i'm?\s+)?(10|11|12|13|14|15|16|17)\s+(years?\s+old|year\s+old)\b/i,
+  // Direct grade self-identification, in any phrasing order
+  /\b(i'?m?|i\s+am|im)\s+(in\s+)?(1st|2nd|3rd|4th|5th|6th|7th|8th|9th|10th|11th|12th)\s+grade\b/i,
+  /\b(1st|2nd|3rd|4th|5th|6th|7th|8th|9th|10th|11th|12th)\s+grade(r)?\s+(here|student)?\b.{0,15}\b(i|me|my)\b/i,
+  // Direct numeric age under 18, in many phrasings
+  /\b(i'?m?|i\s+am|im)\s+(only\s+)?(10|11|12|13|14|15|16|17)\b(?!\d)/i,
+  /\b(10|11|12|13|14|15|16|17)\s*(years?\s+old|yo|y\/o|year\s+old)\b/i,
+  /\b(my\s+age\s+is|age\s*[:=]\s*)\s*(10|11|12|13|14|15|16|17)\b(?!\d)/i,
+  /\bturn(ing|ed)?\s+(10|11|12|13|14|15|16|17)\s+(soon|next|this)\b/i,
+  /\bjust\s+turned\s+(10|11|12|13|14|15|16|17)\b/i,
+  // Indirect but strong self-identification as a minor
+  /\b(i'?m?|i\s+am|im)\s+(a\s+)?(minor|underage|under\s*18|under\s+the\s+age\s+of\s+18)\b/i,
+  /\b(my\s+(mom|mum|dad|mother|father|parents?|teacher))\s+(said|says|told|let|won'?t\s+let|wants?)\b/i,
   /\b(child|kid|boy|girl)\b.*\b(help|write|do|complete)\b/i,
+  /\bcan'?t\s+drive\s+yet\b/i,
+  /\bnot\s+old\s+enough\s+to\s+(drive|vote|drink)\b/i,
 ];
 
-// Patterns indicating college/university context (allows prompts through)
+// Patterns indicating college/university context (allows prompts through).
+// Note: "freshman/sophomore/junior/senior" alone is ambiguous (applies to
+// high school too), so it's intentionally excluded here — only counted as
+// a college signal when paired with an explicit higher-ed word elsewhere
+// in COLLEGE_INDICATORS, or disambiguated in detectK12Minor below.
 const COLLEGE_INDICATORS = [
-  /\b(college|university|grad\s+school|graduate\s+program|bachelor|master|phd|dissertation|thesis)\b/i,
-  /\b(18|19|20|21|22|23|24|25)\s+(years?\s+old|year\s+old)\b/i,
-  /\b(adult|freshman|sophomore|junior|senior|college\s+student|university\s+student)\b/i,
+  /\b(college|university|grad\s+school|graduate\s+program|bachelor|master'?s\s+degree|phd|dissertation|thesis)\b/i,
+  /\b(18|19|20|21|22|23|24|25)\s+(years?\s+old|year\s+old|yo)\b/i,
+  /\b(adult|college\s+student|university\s+student|undergrad(uate)?)\b/i,
   /\b(course|lecture|semester|finals|midterm|syllabus)\b/i,
 ];
 
-function detectK12Minor(prompt: string): boolean {
-  // Check if this is clearly a college/university context
+// These class-year words apply to BOTH high school and college, so they
+// only count as a college signal when combined with another college word
+// elsewhere in the prompt, or with an explicit unambiguous higher-ed
+// context word nearby (college/university).
+const AMBIGUOUS_CLASS_YEAR_WORDS = /\b(freshman|sophomore|junior|senior)\b/i;
+
+function hasUnambiguousCollegeContext(prompt: string): boolean {
   if (COLLEGE_INDICATORS.some(pattern => pattern.test(prompt))) {
+    return true;
+  }
+  // "freshman/sophomore/junior/senior" only counts if "college" or
+  // "university" appears anywhere in the same prompt to disambiguate it
+  // from the high-school meaning of the same words.
+  if (AMBIGUOUS_CLASS_YEAR_WORDS.test(prompt) && /\b(college|university)\b/i.test(prompt)) {
+    return true;
+  }
+  return false;
+}
+
+function detectK12Minor(prompt: string): boolean {
+  // Explicit age/grade self-disclosure as a minor always blocks, even if
+  // college words appear elsewhere — someone saying "I'm 14 but I take
+  // college courses" is still a minor. Direct self-disclosure overrides
+  // ambiguous context clues.
+  if (EXPLICIT_K12_AGE_PATTERNS.some(pattern => pattern.test(prompt))) {
+    return true;
+  }
+
+  // Check if this is clearly a college/university context
+  if (hasUnambiguousCollegeContext(prompt)) {
     return false; // Allow college students through
   }
 
@@ -58,22 +106,20 @@ function detectK12Minor(prompt: string): boolean {
     return true;
   }
 
+  // Ambiguous class-year words (freshman/sophomore/junior/senior) without
+  // any college/university disambiguation default to the more common,
+  // more cautious reading alongside other K-12 signals.
+  if (AMBIGUOUS_CLASS_YEAR_WORDS.test(prompt) && /\b(school|class|teacher|classroom)\b/i.test(prompt)) {
+    return true;
+  }
+
   // Check for K-12 homework context
   const hasHomeworkWords = K12_HOMEWORK_PATTERNS.some(pattern => pattern.test(prompt));
   if (hasHomeworkWords) {
     // Homework + school context is a strong signal for K-12
     if (/\b(school|class|teacher|classroom)\b/i.test(prompt)) {
-      // But allow if college context is present
-      if (COLLEGE_INDICATORS.some(pattern => pattern.test(prompt))) {
-        return false;
-      }
       return true;
     }
-  }
-
-  // Check for explicit age statements indicating minors
-  if (EXPLICIT_K12_AGE_PATTERNS.some(pattern => pattern.test(prompt))) {
-    return true;
   }
 
   return false;
