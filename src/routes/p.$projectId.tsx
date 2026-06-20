@@ -939,7 +939,7 @@ export default function Dashboard() {
                 Vibe-code with <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-sky-500 to-emerald-500">any AI.</span>
               </h1>
               <p className="text-slate-500 text-base">
-                Bring your own keys — Gemini, OpenAI, Claude, Lovable, OpenRouter, anything.
+                Bring your own keys — Gemini, OpenAI, Claude, OpenRouter, anything.
               </p>
             </div>
 
