@@ -920,7 +920,7 @@ export default function Dashboard() {
           <header className="flex h-20 items-center justify-between px-8 w-full border-b border-slate-200 bg-white shadow-sm">
             <div className="flex items-center gap-2 font-black text-xl tracking-tight text-slate-900">
               <Sparkles className="h-6 w-6 text-indigo-600" />
-              <span>VibeCoder</span>
+              <span>BlankSheet</span>
             </div>
             <div className="flex items-center gap-3">
               <button 
