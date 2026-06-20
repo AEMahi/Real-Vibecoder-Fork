@@ -919,7 +919,14 @@ export default function Dashboard() {
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
           <header className="flex h-20 items-center justify-between px-8 w-full border-b border-slate-200 bg-white shadow-sm">
             <div className="flex items-center gap-2 font-black text-xl tracking-tight text-slate-900">
-              <Sparkles className="h-6 w-6 text-indigo-600" />
+              <svg width="0" height="0">
+                <linearGradient id="sparkle-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#4f46e5" />
+                  <stop offset="50%" stopColor="#0ea5e9" />
+                  <stop offset="100%" stopColor="#10b981" />
+                </linearGradient>
+              </svg>
+              <Sparkles className="h-6 w-6" style={{ stroke: "url(#sparkle-gradient)" }} />
               <span>BlankSheet</span>
             </div>
             <div className="flex items-center gap-3">
@@ -1045,7 +1052,14 @@ export default function Dashboard() {
               </button>
               <div className="h-4 w-px bg-slate-200" />
               <div className="flex items-center gap-2 font-semibold">
-                <Sparkles className="h-5 w-5 text-indigo-600 animate-pulse" />
+                <svg width="0" height="0">
+                  <linearGradient id="sparkle-gradient-2" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#4f46e5" />
+                    <stop offset="50%" stopColor="#0ea5e9" />
+                    <stop offset="100%" stopColor="#10b981" />
+                  </linearGradient>
+                </svg>
+                <Sparkles className="h-5 w-5 animate-pulse" style={{ stroke: "url(#sparkle-gradient-2)" }} />
                 <span className="text-slate-800 text-sm font-bold tracking-tight">Active Workspace: {projectId}</span>
               </div>
             </div>
