@@ -2,7 +2,7 @@
 // Drop this file into your project alongside Dashboard.tsx.
 // Import and call `filterPrompt(input)` before sendToAI() in handleFormSubmit.
 
-import { classifyIntent, preloadSemanticFilter } from "./semanticIntentFilter";
+import { classifyIntent, preloadSemanticFilter } from "./routes/semanticIntentFilter";
 import { logPromptResult } from "./promptLog";
 
 export { preloadSemanticFilter };
