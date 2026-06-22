@@ -1,9 +1,10 @@
 // worker.ts (or wrangler.toml config)
-// Cloudflare Worker for blanksheet.dev analytics + prompt logging.
+// Cloudflare Worker for blanksheet.dev analytics + prompt logging + waitlist.
 // Deploy this as your Cloudflare Worker. It:
 //   - Tracks unique users, visit counts, session duration (analytics)
 //   - Receives and stores prompt-filter logs in KV
 //   - Provides an export endpoint for pulling logs to commit to GitHub
+//   - Collects waitlist email signups
 //
 // Requires Cloudflare KV binding named "LOGS" in wrangler.toml:
 //   kv_namespaces = [ { binding = "LOGS", id = "..." } ]
@@ -26,17 +27,15 @@ interface AnalyticsData {
 
 interface PromptLogEntry {
   timestamp: string;
-  userId: string; // fingerprint, not personally identifiable
+  userId: string;
   prompt: string;
   blocked: boolean;
   reason?: string;
   sanitized?: string;
-  hadPIIRedactions?: boolean; // flag from client
+  hadPIIRedactions?: boolean;
 }
 
 // ─── SERVER-SIDE PII REDACTION ────────────────────────────────────────────
-// Belt-and-suspenders: even if client redaction fails or is bypassed,
-// the server does a final scrub before storing.
 const SERVER_PII_PATTERNS = [
   { pattern: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, redaction: "[EMAIL]" },
   { pattern: /\b(?:\d{4}[-\s]?){3}\d{4}\b/g, redaction: "[CREDIT_CARD]" },
@@ -57,7 +56,6 @@ function redactPIIServer(text: string): string {
   return redacted;
 }
 
-// Simple fingerprinting: hash of user agent + IP, no PII
 async function getUserFingerprint(request: Request): Promise<string> {
   const ua = request.headers.get("user-agent") || "unknown";
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
@@ -66,24 +64,17 @@ async function getUserFingerprint(request: Request): Promise<string> {
   const hex = Array.from(new Uint8Array(buf))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
-  return hex.slice(0, 16); // short fingerprint
+  return hex.slice(0, 16);
 }
 
-// ─── SECURE SECRET COMPARISON ──────────────────────────────────────────────
-// A plain `===` check on secrets leaks timing information (how many leading
-// characters matched) that an attacker can use to guess the secret byte by
-// byte. crypto.subtle.timingSafeEqual style comparison fixes that.
 function timingSafeEqual(a: string, b: string): boolean {
   const aBytes = new TextEncoder().encode(a);
   const bBytes = new TextEncoder().encode(b);
-  // Lengths differing is itself fine to leak (lengths aren't secret), but we
-  // still compare against a fixed-length buffer to avoid early return.
   const maxLen = Math.max(aBytes.length, bBytes.length, 1);
   const aPadded = new Uint8Array(maxLen);
   const bPadded = new Uint8Array(maxLen);
   aPadded.set(aBytes);
   bPadded.set(bBytes);
-
   let diff = aBytes.length ^ bBytes.length;
   for (let i = 0; i < maxLen; i++) {
     diff |= aPadded[i] ^ bPadded[i];
@@ -92,18 +83,12 @@ function timingSafeEqual(a: string, b: string): boolean {
 }
 
 function isAuthorized(request: Request, env: Env): boolean {
-  if (!env.EXPORT_SECRET) {
-    // Misconfigured deployment — fail closed, never allow export.
-    return false;
-  }
+  if (!env.EXPORT_SECRET) return false;
   const authHeader = request.headers.get("Authorization") || "";
   const expected = `Bearer ${env.EXPORT_SECRET}`;
   return timingSafeEqual(authHeader, expected);
 }
 
-// ─── BASIC RATE LIMITING FOR LOG INGESTION ────────────────────────────────
-// Prevents a single client from flooding KV with writes. Tracked per
-// fingerprint in KV itself (works across Worker instances, unlike in-memory).
 const INGEST_RATE_LIMIT = {
   MAX_REQUESTS: 30,
   WINDOW_SECONDS: 60,
@@ -113,17 +98,13 @@ async function checkIngestRateLimit(env: Env, userId: string): Promise<boolean> 
   const key = `ratelimit:${userId}`;
   const current = await env.LOGS.get(key);
   const count = current ? parseInt(current, 10) : 0;
-  if (count >= INGEST_RATE_LIMIT.MAX_REQUESTS) {
-    return false;
-  }
+  if (count >= INGEST_RATE_LIMIT.MAX_REQUESTS) return false;
   await env.LOGS.put(key, String(count + 1), {
     expirationTtl: INGEST_RATE_LIMIT.WINDOW_SECONDS,
   });
   return true;
 }
 
-// Restrict CORS to your actual deployed origins instead of "*". Update this
-// list with the real domain(s) your app is served from.
 const ALLOWED_ORIGINS = [
   "https://blanksheet.pages.dev",
   "https://blanksheet.aarushmahi.workers.dev",
@@ -140,6 +121,10 @@ function corsHeadersFor(request: Request): Record<string, string> {
   };
 }
 
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -150,7 +135,68 @@ export default {
       return new Response(null, { headers: corsHeaders });
     }
 
-    // POST /api/analytics - track visits
+    // ── POST /api/waitlist — save email signup ─────────────────────────────
+    if (url.pathname === "/api/waitlist" && request.method === "POST") {
+      try {
+        const body = await request.json() as { email?: string };
+        const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+
+        if (!isValidEmail(email)) {
+          return new Response(JSON.stringify({ error: "Invalid email address" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Store as a set — key per email so duplicates are naturally deduped
+        const waitlistKey = `waitlist:${email}`;
+        const existing = await env.LOGS.get(waitlistKey);
+        if (!existing) {
+          await env.LOGS.put(waitlistKey, JSON.stringify({
+            email,
+            signedUpAt: new Date().toISOString(),
+          }));
+        }
+
+        return new Response(JSON.stringify({ ok: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: "Failed to save email" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ── GET /api/waitlist/export — export all emails (protected) ──────────
+    if (url.pathname === "/api/waitlist/export" && request.method === "GET") {
+      if (!isAuthorized(request, env)) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      try {
+        const list = await env.LOGS.list({ prefix: "waitlist:" });
+        const emails = await Promise.all(
+          list.keys.map(async (k) => {
+            const val = await env.LOGS.get(k.name);
+            return val ? JSON.parse(val) : null;
+          })
+        );
+        return new Response(JSON.stringify(emails.filter(Boolean), null, 2), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: "Export failed" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ── POST /api/analytics — track visits ────────────────────────────────
     if (url.pathname === "/api/analytics" && request.method === "POST") {
       try {
         const userId = await getUserFingerprint(request);
@@ -183,7 +229,7 @@ export default {
             avgSessionDuration: analytics.avgSessionDuration,
             lastUpdated: analytics.lastUpdated,
           }),
-          { expirationTtl: 365 * 24 * 60 * 60 } // 1 year
+          { expirationTtl: 365 * 24 * 60 * 60 }
         );
 
         return new Response(JSON.stringify({ ok: true }), {
@@ -197,7 +243,7 @@ export default {
       }
     }
 
-    // POST /api/prompt-log - store prompt-filter results
+    // ── POST /api/prompt-log — store prompt-filter results ────────────────
     if (url.pathname === "/api/prompt-log" && request.method === "POST") {
       try {
         const userId = await getUserFingerprint(request);
@@ -210,7 +256,7 @@ export default {
           });
         }
 
-        const body = await request.json();
+        const body = await request.json() as { prompt?: unknown; blocked?: unknown; reason?: unknown; sanitized?: unknown; hadPIIRedactions?: unknown };
         if (typeof body.prompt !== "string" || typeof body.blocked !== "boolean") {
           return new Response(JSON.stringify({ error: "Invalid payload" }), {
             status: 400,
@@ -218,7 +264,6 @@ export default {
           });
         }
 
-        // Cap prompt size server-side too, regardless of what the client sent.
         if (body.prompt.length > 8000) {
           return new Response(JSON.stringify({ error: "Prompt too long" }), {
             status: 400,
@@ -226,7 +271,6 @@ export default {
           });
         }
 
-        // Server-side PII redaction (defense in depth)
         const redactedPrompt = redactPIIServer(body.prompt);
 
         const entry: PromptLogEntry = {
@@ -239,13 +283,12 @@ export default {
           hadPIIRedactions: Boolean(body.hadPIIRedactions),
         };
 
-        // Append to KV as a newline-delimited JSON stream
         const logsKey = "logs:prompts";
         const current = (await env.LOGS.get(logsKey)) || "";
         const updated = current + JSON.stringify(entry) + "\n";
 
         await env.LOGS.put(logsKey, updated, {
-          expirationTtl: 365 * 24 * 60 * 60, // 1 year
+          expirationTtl: 365 * 24 * 60 * 60,
         });
 
         return new Response(JSON.stringify({ ok: true }), {
@@ -259,9 +302,7 @@ export default {
       }
     }
 
-    // GET /api/prompt-log/export - fetch all logs as JSON array (for GitHub commit)
-    // Requires Authorization header: Bearer <EXPORT_SECRET>, checked against the
-    // real Cloudflare secret (env.EXPORT_SECRET), not a hardcoded placeholder.
+    // ── GET /api/prompt-log/export ─────────────────────────────────────────
     if (url.pathname === "/api/prompt-log/export" && request.method === "GET") {
       if (!isAuthorized(request, env)) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -288,7 +329,7 @@ export default {
       }
     }
 
-    // GET /api/analytics/export - fetch analytics (for your own dashboard)
+    // ── GET /api/analytics/export ──────────────────────────────────────────
     if (url.pathname === "/api/analytics/export" && request.method === "GET") {
       if (!isAuthorized(request, env)) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), {

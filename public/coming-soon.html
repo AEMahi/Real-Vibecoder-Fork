@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BlankSheet — Coming Soon</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;800&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #4f46e5 0%, #0ea5e9 50%, #10b981 100%);
+      color: white;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    .icon-wrap {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 2rem;
+    }
+
+    h1 {
+      font-size: clamp(2.5rem, 8vw, 5rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      margin-bottom: 1.25rem;
+    }
+
+    p.subtitle {
+      font-size: clamp(1rem, 2.5vw, 1.2rem);
+      color: rgba(255,255,255,0.8);
+      max-width: 480px;
+      line-height: 1.6;
+      margin-bottom: 3rem;
+    }
+
+    .notify-form {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .notify-form input {
+      flex: 1;
+      min-width: 200px;
+      padding: 0.85rem 1.25rem;
+      border-radius: 0.75rem;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(8px);
+      color: white;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .notify-form input::placeholder { color: rgba(255,255,255,0.5); }
+    .notify-form input:focus { border-color: rgba(255,255,255,0.6); }
+
+    .notify-form button {
+      padding: 0.85rem 1.5rem;
+      border-radius: 0.75rem;
+      border: none;
+      background: white;
+      color: #1e1b4b;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.15s;
+      white-space: nowrap;
+    }
+
+    .notify-form button:hover { opacity: 0.92; transform: translateY(-1px); }
+    .notify-form button:active { transform: translateY(0); }
+    .notify-form button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    .message {
+      margin-top: 1rem;
+      font-size: 0.95rem;
+      min-height: 1.4rem;
+    }
+
+    .message.success { color: rgba(255,255,255,0.9); }
+    .message.error { color: #fca5a5; }
+
+    .brand {
+      position: fixed;
+      top: 1.5rem;
+      left: 2rem;
+      font-size: 1.2rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+
+  <span class="brand">BlankSheet</span>
+
+  <div class="icon-wrap">
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3l1.88 5.76a1 1 0 00.95.69H21l-4.94 3.57a1 1 0 00-.36 1.12L17.56 20 12 16.18 6.44 20l1.86-5.86a1 1 0 00-.36-1.12L3 9.45h6.17a1 1 0 00.95-.69L12 3z"/>
+    </svg>
+  </div>
+
+  <h1>Something big<br/>is coming.</h1>
+
+  <p class="subtitle">BlankSheet is your ultimate Multi-AI Sandbox Dev Environment. We're putting the finishing touches on something great — enter your email and we'll let you know the moment we launch.</p>
+
+  <div class="notify-form" id="form">
+    <input type="email" placeholder="you@example.com" id="email" />
+    <button id="btn" onclick="handleSubmit()">Notify me</button>
+  </div>
+  <p class="message" id="message"></p>
+
+  <script>
+    const WORKER_URL = "https://blanksheet-worker.aarushmahi.workers.dev";
+
+    async function handleSubmit() {
+      const emailInput = document.getElementById('email');
+      const btn = document.getElementById('btn');
+      const message = document.getElementById('message');
+      const email = emailInput.value.trim();
+
+      if (!email || !email.includes('@')) {
+        message.textContent = 'Please enter a valid email address.';
+        message.className = 'message error';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      message.textContent = '';
+      message.className = 'message';
+
+      try {
+        const res = await fetch(`${WORKER_URL}/api/waitlist`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+
+        if (res.ok) {
+          document.getElementById('form').style.display = 'none';
+          message.textContent = "You're on the list. We'll be in touch soon! 🎉";
+          message.className = 'message success';
+        } else {
+          throw new Error('Server error');
+        }
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Notify me';
+        message.textContent = 'Something went wrong. Please try again.';
+        message.className = 'message error';
+      }
+    }
+
+    document.getElementById('email').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') handleSubmit();
+    });
+  </script>
+
+</body>
+</html>

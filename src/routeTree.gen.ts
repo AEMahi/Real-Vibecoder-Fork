@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PProjectIdRouteImport } from './routes/p.$projectId'
 import { Route as DevAnalyticsRouteImport } from './routes/dev/analytics'
+import { Route as IndexTsxBakRouteImport } from './routes/index.tsx.bak'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,35 +29,44 @@ const DevAnalyticsRoute = DevAnalyticsRouteImport.update({
   path: '/dev/analytics',
   getParentRoute: () => rootRouteImport,
 } as any)
+const IndexTsxBakRoute = IndexTsxBakRouteImport.update({
+  id: '/index/tsx/bak',
+  path: '/index/tsx/bak',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dev/analytics': typeof DevAnalyticsRoute
   '/p/$projectId': typeof PProjectIdRoute
+  '/index/tsx/bak': typeof IndexTsxBakRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dev/analytics': typeof DevAnalyticsRoute
   '/p/$projectId': typeof PProjectIdRoute
+  '/index/tsx/bak': typeof IndexTsxBakRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/dev/analytics': typeof DevAnalyticsRoute
   '/p/$projectId': typeof PProjectIdRoute
+  '/index/tsx/bak': typeof IndexTsxBakRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/dev/analytics' | '/p/$projectId'
+  fullPaths: '/' | '/dev/analytics' | '/p/$projectId' | '/index/tsx/bak'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dev/analytics' | '/p/$projectId'
-  id: '__root__' | '/' | '/dev/analytics' | '/p/$projectId'
+  to: '/' | '/dev/analytics' | '/p/$projectId' | '/index/tsx/bak'
+  id: '__root__' | '/' | '/dev/analytics' | '/p/$projectId' | '/index/tsx/bak'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DevAnalyticsRoute: typeof DevAnalyticsRoute
   PProjectIdRoute: typeof PProjectIdRoute
+  IndexTsxBakRoute: typeof IndexTsxBakRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +92,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DevAnalyticsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/index/tsx/bak': {
+      id: '/index/tsx/bak'
+      path: '/index/tsx/bak'
+      fullPath: '/index/tsx/bak'
+      preLoaderRoute: typeof IndexTsxBakRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DevAnalyticsRoute: DevAnalyticsRoute,
   PProjectIdRoute: PProjectIdRoute,
+  IndexTsxBakRoute: IndexTsxBakRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
