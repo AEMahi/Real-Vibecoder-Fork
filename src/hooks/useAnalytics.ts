@@ -1,10 +1,10 @@
 // src/hooks/useAnalytics.ts
-// Drop this file into src/hooks/useAnalytics.ts
 
 import { useEffect } from "react";
 import { nanoid } from "nanoid";
 
 const STORAGE_KEY = "vibecoder_analytics";
+const WORKER_URL = "https://blanksheet-worker.aarushmahi.workers.dev";
 
 export interface AnalyticsSession {
   userId: string;
@@ -42,17 +42,24 @@ function getUserId(): string {
   return id;
 }
 
-/**
- * Call this hook once at the app root (e.g. in your __root.tsx outlet wrapper
- * or in your index route component). It starts a session on mount and records
- * the duration on unmount / page unload.
- */
+async function sendToWorker(payload: object) {
+  try {
+    await fetch(`${WORKER_URL}/api/analytics`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    // Fail silently — localStorage still works as fallback
+  }
+}
+
 export function useAnalytics() {
   useEffect(() => {
     const userId = getUserId();
     const startTime = Date.now();
 
-    // Record a new visit session
+    // Record locally
     const data = getAnalytics();
     const session: AnalyticsSession = { userId, startTime };
     data.sessions.push(session);
@@ -60,6 +67,9 @@ export function useAnalytics() {
     saveAnalytics(data);
 
     const sessionIndex = data.sessions.length - 1;
+
+    // Send visit to worker
+    void sendToWorker({ userId, startTime });
 
     function finalise() {
       const endTime = Date.now();
@@ -70,9 +80,10 @@ export function useAnalytics() {
         latest.sessions[sessionIndex].duration = duration;
         saveAnalytics(latest);
       }
+      // Send session duration to worker
+      void sendToWorker({ userId, startTime, endTime, duration });
     }
 
-    // Capture on both unmount and tab close
     window.addEventListener("beforeunload", finalise);
     return () => {
       finalise();
@@ -101,7 +112,7 @@ export function getAnalyticsSummary() {
 
   return {
     uniqueUsers,
-    avgDuration, // seconds
+    avgDuration,
     totalVisits: data.totalVisits ?? 0,
   };
 }

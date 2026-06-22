@@ -125,8 +125,8 @@ async function checkIngestRateLimit(env: Env, userId: string): Promise<boolean> 
 // Restrict CORS to your actual deployed origins instead of "*". Update this
 // list with the real domain(s) your app is served from.
 const ALLOWED_ORIGINS = [
-  "https://blanksheet.dev",
-  "https://www.blanksheet.dev",
+  "https://blanksheet.pages.dev",
+  "https://blanksheet.aarushmahi.workers.dev",
 ];
 
 function corsHeadersFor(request: Request): Record<string, string> {
