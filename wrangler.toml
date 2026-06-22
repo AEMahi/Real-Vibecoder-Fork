@@ -1,4 +1,4 @@
-name = "blanksheet-worker"
+name = "blanksheet"
 main = "cloudflare-worker.ts"
 compatibility_date = "2024-12-01"
 
